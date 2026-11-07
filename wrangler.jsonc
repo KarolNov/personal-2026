@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "personal-2026",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Static assets (dist/client) are wired up by the Astro adapter at build time.
+  "assets": { "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "vars": {
+    "CONTACT_TO": "you@example.com",
+    "CONTACT_FROM": "contact@example.com"
+  },
+  // Cloudflare Email Service binding used by the contact form.
+  // Requires the sending domain to be onboarded: `npx wrangler email sending enable <domain>`
+  "send_email": [{ "name": "EMAIL" }]
+}

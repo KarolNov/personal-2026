@@ -1,0 +1,79 @@
+:root {
+  --bg: #fbfaf8;
+  --fg: #1c1b19;
+  --muted: #6b6760;
+  --border: #e6e2db;
+  --accent: #2f5bd3;
+  --accent-fg: #ffffff;
+  --surface: #ffffff;
+  --danger: #b42318;
+  --success: #067647;
+  --radius: 10px;
+  --max: 42rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211;
+    --fg: #ecebe8;
+    --muted: #9b978f;
+    --border: #2a2927;
+    --accent: #7d9cff;
+    --accent-fg: #0b0b0a;
+    --surface: #1a1918;
+    --danger: #f97066;
+    --success: #47cd89;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 1.0625rem/1.65 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container { max-width: var(--max); margin: 0 auto; padding: 0 1.25rem; }
+
+a { color: var(--accent); text-underline-offset: 0.2em; }
+a:hover { text-decoration-thickness: 2px; }
+
+h1, h2, h3 { line-height: 1.25; letter-spacing: -0.015em; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); margin: 0 0 0.5rem; }
+
+img { max-width: 100%; height: auto; border-radius: var(--radius); }
+
+code { font-family: var(--font-mono); font-size: 0.9em; }
+pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 0.9rem; }
+
+.muted { color: var(--muted); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover { filter: brightness(1.08); }
+.button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
