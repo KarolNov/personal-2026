@@ -6,8 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   // Static assets (dist/client) are wired up by the Astro adapter at build time.
   "assets": { "binding": "ASSETS" },
-  // Serve the Worker on the apex domain (the karolnov.dev zone must be on this Cloudflare account).
-  "routes": [{ "pattern": "karolnov.dev", "custom_domain": true }],
+  // Serve the Worker on beta.karolnov.dev for now (the karolnov.dev zone must be on this Cloudflare account).
+  // To go live on the apex: change this pattern, TURNSTILE_HOSTNAMES below and `site` in astro.config.mjs.
+  "routes": [{ "pattern": "beta.karolnov.dev", "custom_domain": true }],
   "observability": { "enabled": true },
   // Secrets (not in this file): CONTACT_TO, TURNSTILE_SECRET — set with `npx wrangler secret put <NAME>`
   "vars": {
@@ -15,7 +16,7 @@
     // Turnstile: public sitekey and the frontend hostnames siteverify must report.
     // The secret is set separately: `npx wrangler secret put TURNSTILE_SECRET`
     "TURNSTILE_SITEKEY": "0x4AAAAAAF3cSVRX_X6uq4lF",
-    "TURNSTILE_HOSTNAMES": "karolnov.dev"
+    "TURNSTILE_HOSTNAMES": "beta.karolnov.dev"
   },
   // Cloudflare Email Service binding used by the contact form.
   // Requires the sending domain to be onboarded: `npx wrangler email sending enable <domain>`
