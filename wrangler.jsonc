@@ -14,7 +14,7 @@
     "CONTACT_FROM": "blog@karolnov.dev",
     // Turnstile: public sitekey and the frontend hostnames siteverify must report.
     // The secret is set separately: `npx wrangler secret put TURNSTILE_SECRET`
-    "TURNSTILE_SITEKEY": "REPLACE_WITH_SITEKEY",
+    "TURNSTILE_SITEKEY": "0x4AAAAAAF3cSVRX_X6uq4lF",
     "TURNSTILE_HOSTNAMES": "karolnov.dev"
   },
   // Cloudflare Email Service binding used by the contact form.
