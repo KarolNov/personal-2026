@@ -17,9 +17,10 @@ Built with [Astro 7](https://astro.build) and deployed as a single [Cloudflare W
 - **Blog** — Markdown/MDX content collection with typed frontmatter (`src/content.config.ts`).
   Set `draft: true` to hide a post from production builds (still visible in `npm run dev`).
 - **Contact form** — an [Astro Action](https://docs.astro.build/en/guides/actions/) that validates input,
-  drops bots via a honeypot field, and sends the message with the
+  blocks bots with [Turnstile](https://developers.cloudflare.com/turnstile/) (verified server-side in
+  `src/lib/turnstile.ts`) plus a honeypot field, and sends the message with the
   [Cloudflare Email Service](https://developers.cloudflare.com/email-service/) `send_email` binding.
-  Works without JavaScript.
+  The Turnstile widget needs JavaScript.
 
 ## Commands
 
@@ -33,6 +34,7 @@ Built with [Astro 7](https://astro.build) and deployed as a single [Cloudflare W
 | `npm run deploy` | Build and deploy with Wrangler |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc` |
 
+For local development, `cp .dev.vars.example .dev.vars` — it holds Cloudflare's Turnstile *test* keys (always pass).
 Locally, the email binding is simulated — sent messages are logged to the console and written under `.wrangler/tmp/email/`.
 
 ## Before the first deploy
@@ -41,5 +43,8 @@ Locally, the email binding is simulated — sent messages are logged to the cons
 2. `npx wrangler login`
 3. Onboard the sending domain for Email Service: `npx wrangler email sending enable <your-domain>`
 4. In `wrangler.jsonc`, set `CONTACT_FROM` (an address on that domain) and `CONTACT_TO` (where messages go).
-5. `npm run deploy`, then attach a custom domain to the `personal-2026` Worker in the Cloudflare dashboard
+5. Create a Turnstile widget (Dashboard → Turnstile → Add widget, managed mode) for your domain, then in
+   `wrangler.jsonc` set `TURNSTILE_SITEKEY` and `TURNSTILE_HOSTNAMES` (production hostnames only — no `localhost`),
+   and store the secret: `npx wrangler secret put TURNSTILE_SECRET`
+6. `npm run deploy`, then attach a custom domain to the `personal-2026` Worker in the Cloudflare dashboard
    (or add a `routes` entry to `wrangler.jsonc`).

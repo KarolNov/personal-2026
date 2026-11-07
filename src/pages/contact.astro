@@ -1,5 +1,6 @@
 ---
 import { actions, isInputError } from 'astro:actions';
+import { env } from 'cloudflare:workers';
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 // Rendered on demand so the form works without JavaScript (POST → action → re-render).
@@ -9,9 +10,11 @@ const result = Astro.getActionResult(actions.contact);
 const fieldErrors = isInputError(result?.error) ? result.error.fields : {};
 const sent = result && !result.error;
 const failed = result?.error && !isInputError(result.error);
+const sitekey = env.TURNSTILE_SITEKEY;
 ---
 
 <BaseLayout title="Contact" description="Get in touch.">
+  <script slot="head" is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <h1>Contact</h1>
   <p class="muted">Have a question, an idea or just want to say hi? Drop me a line.</p>
 
@@ -44,6 +47,9 @@ const failed = result?.error && !isInputError(result.error);
         <input name="website" tabindex="-1" autocomplete="off" />
       </label>
 
+      <div class="cf-turnstile" data-sitekey={sitekey} data-action="contact"></div>
+      <noscript><p class="notice error">Please enable JavaScript — it's needed for the spam check.</p></noscript>
+
       <button class="button" type="submit">Send message</button>
     </form>
   )}
@@ -66,6 +72,7 @@ const failed = result?.error && !isInputError(result.error);
   [aria-invalid='true'] { border-color: var(--danger); }
   small.error { color: var(--danger); font-weight: 400; }
   button { justify-self: start; }
+  .cf-turnstile { min-height: 65px; }
   .notice { padding: 0.9rem 1rem; border-radius: var(--radius); border: 1px solid currentColor; }
   .notice.success { color: var(--success); }
   .notice.error { color: var(--danger); }

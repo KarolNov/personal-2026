@@ -9,7 +9,11 @@
   "observability": { "enabled": true },
   "vars": {
     "CONTACT_TO": "you@example.com",
-    "CONTACT_FROM": "contact@example.com"
+    "CONTACT_FROM": "contact@example.com",
+    // Turnstile: public sitekey and the frontend hostnames siteverify must report.
+    // The secret is set separately: `npx wrangler secret put TURNSTILE_SECRET`
+    "TURNSTILE_SITEKEY": "REPLACE_WITH_SITEKEY",
+    "TURNSTILE_HOSTNAMES": "example.com,www.example.com"
   },
   // Cloudflare Email Service binding used by the contact form.
   // Requires the sending domain to be onboarded: `npx wrangler email sending enable <domain>`
