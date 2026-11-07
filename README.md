@@ -18,8 +18,9 @@ Built with [Astro 7](https://astro.build) and deployed as a single [Cloudflare W
   Set `draft: true` to hide a post from production builds (still visible in `npm run dev`).
 - **Contact form** — an [Astro Action](https://docs.astro.build/en/guides/actions/) that validates input,
   blocks bots with [Turnstile](https://developers.cloudflare.com/turnstile/) (verified server-side in
-  `src/lib/turnstile.ts`) plus a honeypot field, and sends the message with the
-  [Cloudflare Email Service](https://developers.cloudflare.com/email-service/) `send_email` binding.
+  `src/lib/turnstile.ts`) plus a honeypot field, and emails the message to you through
+  [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/) (free) via a `send_email` binding
+  (`src/lib/mail.ts`). Email Routing can only send to verified destination addresses, which is all a contact form needs.
   The Turnstile widget needs JavaScript.
 
 ## Commands
@@ -44,9 +45,11 @@ To move to the apex `karolnov.dev`, update the `routes` pattern and `TURNSTILE_H
 `site` in `astro.config.mjs`, and the sitemap URL in `public/robots.txt`.
 
 1. Make sure the `karolnov.dev` zone is on your Cloudflare account, then `npx wrangler login`.
-2. Onboard the sending domain for Email Service: `npx wrangler email sending enable karolnov.dev`
-   Contact messages are sent from `blog@karolnov.dev` (`CONTACT_FROM` in `wrangler.jsonc`) to the address in the
-   `CONTACT_TO` secret: `npx wrangler secret put CONTACT_TO`
+2. Enable Email Routing and verify where contact messages should land:
+   `npx wrangler email routing enable karolnov.dev`, then
+   `npx wrangler email routing addresses create <your inbox>` and click the link in the verification email.
+   Store that same address as a secret: `npx wrangler secret put CONTACT_TO`.
+   Messages are sent from `blog@karolnov.dev` (`CONTACT_FROM` in `wrangler.jsonc`).
 3. Create a Turnstile widget (Dashboard → Turnstile → Add widget, managed mode) for `karolnov.dev`, put its
    sitekey in `TURNSTILE_SITEKEY` in `wrangler.jsonc`, and store the secret: `npx wrangler secret put TURNSTILE_SECRET`
 4. `npm run deploy` — Wrangler attaches `beta.karolnov.dev` to the Worker and provisions the certificate.

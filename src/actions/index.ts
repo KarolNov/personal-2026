@@ -1,6 +1,6 @@
 import { ActionError, defineAction } from 'astro:actions';
 import { z } from 'astro/zod';
-import { env } from 'cloudflare:workers';
+import { sendContactEmail } from '../lib/mail';
 import { verifyTurnstile } from '../lib/turnstile';
 
 export const server = {
@@ -28,13 +28,7 @@ export const server = {
       }
 
       try {
-        await env.EMAIL.send({
-          from: { email: env.CONTACT_FROM, name: 'Website contact form' },
-          to: env.CONTACT_TO,
-          replyTo: { email, name },
-          subject: `New message from ${name}`,
-          text: `From: ${name} <${email}>\n\n${message}`,
-        });
+        await sendContactEmail({ name, email, message });
       } catch (err) {
         console.error('contact: failed to send email', err);
         throw new ActionError({

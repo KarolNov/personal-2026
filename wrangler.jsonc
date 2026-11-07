@@ -18,7 +18,7 @@
     "TURNSTILE_SITEKEY": "0x4AAAAAAF3cSVRX_X6uq4lF",
     "TURNSTILE_HOSTNAMES": "beta.karolnov.dev"
   },
-  // Cloudflare Email Service binding used by the contact form.
-  // Requires the sending domain to be onboarded: `npx wrangler email sending enable <domain>`
+  // Email Routing send binding used by the contact form. Unrestricted, so it can send to any
+  // verified destination address on the account (CONTACT_TO must be verified).
   "send_email": [{ "name": "EMAIL" }]
 }
