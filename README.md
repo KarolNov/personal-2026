@@ -43,7 +43,8 @@ The site is served at **https://karolnov.dev** (custom domain route in `wrangler
 
 1. Make sure the `karolnov.dev` zone is on your Cloudflare account, then `npx wrangler login`.
 2. Onboard the sending domain for Email Service: `npx wrangler email sending enable karolnov.dev`
-   Contact messages are sent from `blog@karolnov.dev` to `CONTACT_TO` (both in `wrangler.jsonc`).
+   Contact messages are sent from `blog@karolnov.dev` (`CONTACT_FROM` in `wrangler.jsonc`) to the address in the
+   `CONTACT_TO` secret: `npx wrangler secret put CONTACT_TO`
 3. Create a Turnstile widget (Dashboard → Turnstile → Add widget, managed mode) for `karolnov.dev`, put its
    sitekey in `TURNSTILE_SITEKEY` in `wrangler.jsonc`, and store the secret: `npx wrangler secret put TURNSTILE_SECRET`
 4. `npm run deploy` — Wrangler attaches `karolnov.dev` to the Worker and provisions the certificate.
