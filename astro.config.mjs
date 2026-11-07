@@ -5,8 +5,7 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  // TODO: set to your production domain (used for canonical URLs, RSS and sitemap)
-  site: 'https://example.com',
+  site: 'https://karolnov.dev',
   // Pages are prerendered by default; opt individual routes into SSR with `export const prerender = false`.
   output: 'static',
   adapter: cloudflare({

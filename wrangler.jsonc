@@ -6,14 +6,16 @@
   "compatibility_flags": ["nodejs_compat"],
   // Static assets (dist/client) are wired up by the Astro adapter at build time.
   "assets": { "binding": "ASSETS" },
+  // Serve the Worker on the apex domain (the karolnov.dev zone must be on this Cloudflare account).
+  "routes": [{ "pattern": "karolnov.dev", "custom_domain": true }],
   "observability": { "enabled": true },
   "vars": {
     "CONTACT_TO": "you@example.com",
-    "CONTACT_FROM": "contact@example.com",
+    "CONTACT_FROM": "blog@karolnov.dev",
     // Turnstile: public sitekey and the frontend hostnames siteverify must report.
     // The secret is set separately: `npx wrangler secret put TURNSTILE_SECRET`
     "TURNSTILE_SITEKEY": "REPLACE_WITH_SITEKEY",
-    "TURNSTILE_HOSTNAMES": "example.com,www.example.com"
+    "TURNSTILE_HOSTNAMES": "karolnov.dev"
   },
   // Cloudflare Email Service binding used by the contact form.
   // Requires the sending domain to be onboarded: `npx wrangler email sending enable <domain>`
