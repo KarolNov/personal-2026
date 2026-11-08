@@ -194,8 +194,12 @@ export function initScrollBall() {
     let trailColor = '';
     let win = { x: 0, y: 0, w: 0, h: 0 };
     function sizeTrail() {
-      const x = trackX() - dot * 2;
-      const w = Math.ceil(main!.clientWidth - x + dot * 2);
+      // Kept within the window: on phones the track sits at the screen edge, and a canvas
+      // poking past it lets the page wiggle sideways (iOS pans even with overflow-x clipped).
+      const mainLeft = main!.getBoundingClientRect().left;
+      const x = Math.max(trackX() - dot * 2, Math.floor(-mainLeft));
+      const right = Math.min(main!.clientWidth + dot * 2, document.documentElement.clientWidth - mainLeft);
+      const w = Math.floor(right - x);
       // Sized from the screen, not the window, so iOS's toolbar showing and hiding doesn't
       // reallocate the canvas mid-scroll.
       const h = Math.ceil(Math.max(innerHeight, screen.height) * 1.5);
