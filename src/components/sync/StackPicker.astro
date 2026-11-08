@@ -1,0 +1,203 @@
+---
+// "Which tool fits you?" — four questions, and a starting point that updates as you answer.
+// The rules live in the script below; they are a rough guide, not a verdict.
+const QUESTIONS = [
+  {
+    name: 'what',
+    label: 'What are people editing together?',
+    options: [
+      ['text', 'Rich text / documents'],
+      ['canvas', 'A canvas or structured document'],
+      ['data', 'App data: records, tasks, rows'],
+    ],
+  },
+  {
+    name: 'host',
+    label: 'Who runs the servers?',
+    options: [
+      ['managed', 'Someone else, please'],
+      ['self', 'We do'],
+    ],
+  },
+  {
+    name: 'offline',
+    label: 'How long can people be offline?',
+    options: [
+      ['short', 'A flaky train ride'],
+      ['long', 'Days, then merge'],
+    ],
+  },
+  {
+    name: 'core',
+    label: 'Is sync the product, or a feature of it?',
+    options: [
+      ['feature', 'A feature'],
+      ['core', 'The product'],
+    ],
+  },
+] as const;
+---
+
+<figure class="picker" data-picker>
+  <div class="questions">
+    {QUESTIONS.map((q) => (
+      <fieldset>
+        <legend>{q.label}</legend>
+        <div class="chips">
+          {q.options.map(([value, text], oi) => (
+            <label>
+              <input type="radio" name={`picker-${q.name}`} data-q={q.name} value={value} checked={oi === 0} />
+              <span>{text}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    ))}
+  </div>
+  <div class="result" aria-live="polite" data-result></div>
+</figure>
+
+<style>
+  .picker {
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    overflow: hidden;
+    font-size: 0.92rem;
+  }
+  .questions { padding: 1rem; border-right: 1px solid var(--border); }
+  fieldset { border: 0; margin: 0 0 0.9rem; padding: 0; }
+  fieldset:last-child { margin-bottom: 0; }
+  legend { font-weight: 600; margin-bottom: 0.4rem; padding: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chips label { position: relative; cursor: pointer; }
+  .chips input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+  .chips span {
+    display: inline-block;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    transition: background-color 150ms, color 150ms, border-color 150ms, transform 120ms var(--ease-out);
+  }
+  .chips label:active span { transform: scale(0.96); }
+  .chips input:checked + span { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--accent-fg); }
+  .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .result { padding: 1rem 1.25rem; background: var(--bg); }
+  .result :global(.eyebrow) { margin: 0 0 0.25rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .result :global(h4) { margin: 0 0 0.5rem; font-size: 1.15rem; line-height: 1.3; }
+  .result :global(p) { margin: 0 0 0.75rem; }
+  .result :global(.also) { color: var(--muted); font-size: 0.88rem; }
+  .result :global(.fine) { font-size: 0.8rem; color: var(--muted); margin: 0; }
+  .result :global(.in) { animation: rise 260ms var(--ease-out); }
+
+  @media (max-width: 40rem) {
+    .picker { grid-template-columns: 1fr; }
+    .questions { border-right: 0; border-bottom: 1px solid var(--border); }
+  }
+</style>
+
+<script>
+  type Answers = { what: 'text' | 'canvas' | 'data'; host: 'managed' | 'self'; offline: 'short' | 'long'; core: 'feature' | 'core' };
+  type Pick = { title: string; why: string; also: [string, string][] };
+
+  const L = {
+    liveblocks: ['Liveblocks', 'https://liveblocks.io'],
+    hocuspocus: ['Hocuspocus', 'https://tiptap.dev/docs/hocuspocus/introduction'],
+    partyserver: ['PartyServer (y-partyserver)', 'https://github.com/cloudflare/partykit'],
+    ysweet: ['y-sweet', 'https://github.com/jamsocket/y-sweet'],
+    yjs: ['Yjs', 'https://yjs.dev'],
+    loro: ['Loro', 'https://loro.dev'],
+    automerge: ['Automerge', 'https://automerge.org'],
+    tldraw: ['tldraw sync', 'https://tldraw.dev/docs/sync'],
+    zero: ['Zero', 'https://zero.rocicorp.dev'],
+    electric: ['ElectricSQL', 'https://electric-sql.com'],
+    powersync: ['PowerSync', 'https://www.powersync.com'],
+    instant: ['InstantDB', 'https://www.instantdb.com'],
+    convex: ['Convex', 'https://www.convex.dev'],
+  } satisfies Record<string, [string, string]>;
+
+  function pick(a: Answers): Pick {
+    if (a.what === 'data') {
+      if (a.core === 'core')
+        return {
+          title: 'Study Linear before you write a line',
+          why: 'Records with fields rarely need a CRDT. A server that orders every change, last-write-wins per field, and a local cache that replays your pending changes on top gets you very far. Borrow the shape from the tools below even if you build it yourself.',
+          also: [L.zero, L.powersync, L.electric],
+        };
+      if (a.offline === 'long')
+        return {
+          title: 'PowerSync',
+          why: 'Syncs your backend database into SQLite on the device and queues writes while offline, which you then apply through your own API. Built for long offline stretches, and available hosted or self-hosted.',
+          also: [L.electric, L.zero],
+        };
+      return a.host === 'managed'
+        ? {
+            title: 'InstantDB or Convex',
+            why: 'Hosted backends where queries update live and you never write sync code. Check how each one handles going offline before you commit: it varies a lot.',
+            also: [L.zero, L.powersync],
+          }
+        : {
+            title: 'Zero or ElectricSQL on your Postgres',
+            why: 'Keep Postgres as the source of truth and sync the parts each client needs. Your permissions and validation stay on the server, where they already live.',
+            also: [L.powersync],
+          };
+    }
+
+    if (a.core === 'core')
+      return {
+        title: a.what === 'canvas' ? 'Your own server on Yjs or Loro' : 'Your own server on Yjs',
+        why: 'This is the case where building your own pays off: you need control over validation, permissions and the data model. Even then, use a CRDT library — that part is solved. The rest of this series is about what remains.',
+        also: a.what === 'canvas' ? [L.yjs, L.loro, L.automerge] : [L.yjs, L.hocuspocus, L.loro],
+      };
+
+    if (a.host === 'managed')
+      return a.what === 'text'
+        ? {
+            title: 'Liveblocks with Yjs',
+            why: 'A hosted Yjs backend with ready integrations for the common rich-text editors, plus presence and comments. You write the editor, not the infrastructure.',
+            also: [L.hocuspocus, L.ysweet],
+          }
+        : {
+            title: 'Liveblocks Storage',
+            why: 'Conflict-free objects, lists and maps with presence and undo/redo built in. It suits canvases and structured documents better than modelling everything in a text CRDT.',
+            also: [L.tldraw, L.partyserver],
+          };
+
+    const offline = a.offline === 'long' ? ' Keep a copy in IndexedDB on the client (y-indexeddb) so edits survive a closed tab.' : '';
+    return a.what === 'text'
+      ? {
+          title: 'Hocuspocus + Yjs',
+          why: `An open-source Yjs server with hooks for auth and persistence, from the team behind Tiptap.${offline}`,
+          also: [L.partyserver, L.ysweet],
+        }
+      : {
+          title: 'Yjs on PartyServer',
+          why: `One Durable Object per document on Cloudflare: the room, its state and its WebSockets in one place.${offline} If your canvas is a whiteboard, look at tldraw sync first.`,
+          also: [L.tldraw, L.hocuspocus, L.loro],
+        };
+  }
+
+  const link = ([text, href]: [string, string]) => `<a href="${href}">${text}</a>`;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-picker]')) {
+    const result = root.querySelector<HTMLElement>('[data-result]')!;
+    const render = () => {
+      const answers = Object.fromEntries(
+        [...root.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => [i.dataset.q, i.value]),
+      ) as Answers;
+      const p = pick(answers);
+      result.innerHTML = `<div class="in"><p class="eyebrow">Start with</p><h4>${p.title}</h4><p>${p.why}</p>
+        <p class="also">Also look at: ${p.also.map(link).join(', ')}</p>
+        <p class="fine">A starting point, not a verdict.</p></div>`;
+    };
+    root.addEventListener('change', render);
+    render();
+  }
+</script>

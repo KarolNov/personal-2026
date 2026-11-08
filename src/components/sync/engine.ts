@@ -16,7 +16,7 @@ export type Effect = { kind: 'ins' | 'del'; pos: number } | { kind: 'set' };
 export type LogEntry = { by: ClientId; text: string; changed?: boolean };
 
 /** A message on the wire. `label` is the short text drawn on the travelling pill. */
-export type Message = { label: string; ack?: boolean; payload: unknown };
+export type Message = { label: string; ack?: boolean; from?: ClientId; payload: unknown };
 
 /**
  * One sync strategy. The playground calls `edit` when someone types, moves the returned
@@ -25,8 +25,6 @@ export type Message = { label: string; ack?: boolean; payload: unknown };
 export interface Strategy {
   text(who: ClientId | 'server'): string;
   edit(who: ClientId, prev: string, next: string): Message[];
-  /** The client's link came back online or got an ack: anything it was holding back. */
-  flush(who: ClientId): Message[];
   serverReceive(from: ClientId, msg: Message): { log?: LogEntry; out: { to: ClientId; msg: Message }[] };
   clientReceive(who: ClientId, msg: Message): { effects: Effect[]; out: Message[] };
   /** The CRDT strategy exposes its items so the playground can draw them. */
@@ -35,7 +33,7 @@ export interface Strategy {
 
 const NAME: Record<ClientId, string> = { alice: 'Alice', bob: 'Bob' };
 const short = (s: string, n = 11) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-const show = (ch: string) => (ch === ' ' ? '␣' : ch);
+export const show = (ch: string) => (ch === ' ' ? '␣' : ch === '\n' ? '↵' : ch);
 
 // ---------------------------------------------------------------------------------------------
 // 1. Naive: send the whole value, last write wins.
@@ -48,7 +46,6 @@ export function naive(initial: string): Strategy {
       state[who] = next;
       return [{ label: `"${short(next)}"`, payload: next }];
     },
-    flush: () => [],
     serverReceive(from, msg) {
       const text = msg.payload as string;
       const overwrote = state.server !== text;
@@ -152,7 +149,6 @@ export function ot(initial: string): Strategy {
       // Only one batch is in flight per client; the rest waits for the server's ack.
       return send(who);
     },
-    flush: send,
     serverReceive(from, msg) {
       const { rev, ops } = msg.payload as { rev: number; ops: TextOp[] };
       // Everything the server applied since this client's last known revision happened
@@ -221,8 +217,10 @@ export const fmtId = (id: Id) => `${id.c[0]}${id.n}`;
 class Rga {
   items: Item[];
   clock: number;
+  private who: ClientId | 'server';
 
-  constructor(private who: ClientId | 'server', initial: string) {
+  constructor(who: ClientId | 'server', initial: string) {
+    this.who = who;
     let origin: Id | null = null;
     this.items = chars(initial).map((ch, i) => {
       const item: Item = { id: { c: 'seed', n: i + 1 }, origin, ch, deleted: false };
@@ -299,7 +297,6 @@ export function crdt(initial: string): Strategy {
       const ops = diff(prev, next, who).map((op) => docs[who].local(op)!).filter(Boolean);
       return ops.length ? [{ label: ops.length === 1 ? fmtCrdt(ops[0]) : `${fmtCrdt(ops[0])} +${ops.length - 1}`, payload: ops }] : [];
     },
-    flush: () => [],
     serverReceive(from, msg) {
       // The server can be a plain relay. Here it also keeps a copy, the way a Yjs server
       // does to persist documents — but it never has to rewrite anyone's ops.
