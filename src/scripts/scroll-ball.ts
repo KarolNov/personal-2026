@@ -213,13 +213,12 @@ export function initScrollBall() {
     // Shape changes happen before travelling, never during: an underline first shrinks sideways
     // into a ball on the track, then the ball moves; a ball first gets level with its heading on
     // the track, then stretches out under it. So the ball only ever travels along the track.
-    // The ball lands on a stop when you settle on it, not while you fly past. A stop reached while
-    // scrolling slowly — or where scrolling comes to rest — is committed: the ball gets there and
-    // stretches out even if you then drift past, and the underline lingers a moment before moving
-    // on. A fast scroll cancels any landing still on its way, so the ball rides along with you
-    // and never lags behind replaying stops you've already left.
+    // The ball lands on a stop when you settle on it, not while you fly past: it heads for a stop
+    // reached while scrolling slowly, or where scrolling comes to rest, but only stretches out if
+    // you're still there when it arrives, so a stop you've already left never flashes up. Once
+    // landed, the underline lingers a moment before moving on, unless you're scrolling fast.
     const LINGER_MS = 120;
-    const FAST_PX_PER_S = 1500;
+    const FAST_PX_PER_S = 1000;
     let landedAt = 0;
     let pending: { el: HTMLElement; box: Box } | null = null;
     let speed = 0;
@@ -228,10 +227,12 @@ export function initScrollBall() {
 
     const next = () => pending;
 
+    const lingering = (now: number) => now - landedAt < LINGER_MS && speed <= FAST_PX_PER_S;
+
     function stage(now: number): Box {
       if (line) {
         if (line === goalLine) return goal;
-        return now - landedAt < LINGER_MS ? lineBox : ballAt(lineBox);
+        return lingering(now) ? lineBox : ballAt(lineBox);
       }
       const stop = next();
       return stop ? ballAt(stop.box) : goal;
@@ -256,11 +257,15 @@ export function initScrollBall() {
 
       // Move on to the next stage once this one is (nearly) done.
       if (line && line !== goalLine) {
-        if (now - landedAt < LINGER_MS) moving = true;
+        if (lingering(now)) moving = true;
         else if (Math.abs(pos.w - dot) < 1 && Math.abs(pos.h - dot) < 1) {
           line = null;
           moving = true;
         }
+      } else if (!line && next() && next()!.el !== goalLine) {
+        // Already scrolled past it: skip it and ride on.
+        pending = null;
+        moving = true;
       } else if (!line && next() && Math.hypot(pos.x - aim.x, pos.y - aim.y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
         // Close enough, and not still flying past: start stretching.
         const stop = next()!;
