@@ -6,10 +6,10 @@ import { getPosts } from '../../lib/posts';
 const posts = await getPosts();
 ---
 
-<BaseLayout title="Blog" description="Notes, essays and write-ups.">
-  <h1>Blog</h1>
-  <p class="muted">Notes, essays and write-ups. Subscribe via <a href="/rss.xml">RSS</a>.</p>
-  <PostList posts={posts} />
+<BaseLayout title="Blog" description="Notes, essays and write-ups." stagger={false}>
+  <h1 class="rise">Blog</h1>
+  <p class="muted rise" style="--i: 1">Notes, essays and write-ups. Subscribe via <a href="/rss.xml">RSS</a>.</p>
+  <PostList posts={posts} stagger={2} />
 </BaseLayout>
 
 <style>

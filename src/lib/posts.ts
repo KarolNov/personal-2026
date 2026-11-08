@@ -6,6 +6,11 @@ export async function getPosts() {
   return posts.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 }
 
+/** A `view-transition-name` that pairs a post's title in lists with its heading on the post page. */
+export function titleTransitionName(id: string) {
+  return `post-${id.replace(/[^a-z0-9-]/gi, '-')}`;
+}
+
 export function formatDate(date: Date) {
   return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' });
 }

@@ -1,5 +1,6 @@
 ---
 import { NAV, SITE_TITLE } from '../consts';
+import ThemeToggle from './ThemeToggle.astro';
 
 const path = Astro.url.pathname;
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
@@ -11,6 +12,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     {NAV.map(({ href, label }) => (
       <a href={href} aria-current={isActive(href) ? 'page' : undefined}>{label}</a>
     ))}
+    <ThemeToggle />
   </nav>
 </header>
 
@@ -22,9 +24,10 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     align-items: center;
     justify-content: space-between;
     padding-block: 1.5rem 3rem;
+    view-transition-name: site-header;
   }
   .brand { font-weight: 700; color: var(--fg); text-decoration: none; }
-  nav { display: flex; gap: 1.25rem; }
+  nav { display: flex; gap: 1.25rem; align-items: center; }
   nav a { color: var(--muted); text-decoration: none; }
   nav a:hover, nav a[aria-current='page'] { color: var(--fg); }
 </style>

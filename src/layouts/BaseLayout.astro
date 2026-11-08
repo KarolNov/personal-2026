@@ -7,9 +7,11 @@ interface Props {
   title: string;
   description: string;
   image?: string;
+  /** Stagger main's direct children in. Pages that mark their own .rise items pass false. */
+  stagger?: boolean;
 }
 
-const { title, description, image } = Astro.props;
+const { title, description, image, stagger = true } = Astro.props;
 ---
 
 <!doctype html>
@@ -20,7 +22,7 @@ const { title, description, image } = Astro.props;
   </head>
   <body>
     <Header />
-    <main class="container">
+    <main class:list={['container', { stagger }]} style="view-transition-name: page">
       <slot />
     </main>
     <Footer />

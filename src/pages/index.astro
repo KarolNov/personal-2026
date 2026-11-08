@@ -1,5 +1,7 @@
 ---
+import { Image } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import portrait from '../assets/karol.jpg';
 import PostList from '../components/PostList.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import { getPosts } from '../lib/posts';
@@ -7,27 +9,51 @@ import { getPosts } from '../lib/posts';
 const recent = (await getPosts()).slice(0, 3);
 ---
 
-<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} stagger={false}>
   <section class="hero">
-    <h1>Hi, I'm Karol.</h1>
-    <p class="lede">
+    <div class="intro">
+      <Image
+        class="portrait rise"
+        src={portrait}
+        alt="Portrait of Karol in Oslo"
+        width={192}
+        height={192}
+        densities={[1, 2]}
+        loading="eager"
+        fetchpriority="high"
+      />
+      <h1 class="rise" style="--i: 1">Hi, I'm Karol.</h1>
+    </div>
+    <p class="lede rise" style="--i: 2">
       I build software and write about what I learn along the way. This is my corner of the web —
       notes, projects and the occasional long read.
     </p>
-    <div class="cta">
+    <div class="cta rise" style="--i: 3">
       <a class="button" href="/blog/">Read the blog</a>
       <a class="button secondary" href="/contact/">Get in touch</a>
     </div>
   </section>
 
   <section>
-    <h2>Recent writing</h2>
-    <PostList posts={recent} />
+    <h2 class="rise" style="--i: 4">Recent writing</h2>
+    <PostList posts={recent} stagger={5} />
   </section>
 </BaseLayout>
 
 <style>
   .hero { margin-bottom: 4rem; }
+  /* Photo and greeting side by side; wraps to stacked on very narrow screens. */
+  .intro { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.25rem; margin-bottom: 1rem; }
+  .intro h1 { margin: 0; }
+  .portrait {
+    display: block;
+    flex: none;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--accent-bg);
+  }
   .lede { font-size: 1.2rem; color: var(--muted); max-width: 36rem; }
   .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
   h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }

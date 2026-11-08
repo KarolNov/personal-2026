@@ -48,6 +48,10 @@ const sitekey = env.TURNSTILE_SITEKEY;
       </label>
 
       <div class="cf-turnstile" data-sitekey={sitekey} data-action="contact"></div>
+      <script is:inline>
+        // Match a manual theme override; Turnstile's default 'auto' only follows the OS.
+        document.querySelector('.cf-turnstile').dataset.theme = document.documentElement.dataset.theme ?? 'auto';
+      </script>
       <noscript><p class="notice error">Please enable JavaScript — it's needed for the spam check.</p></noscript>
 
       <button class="button" type="submit">Send message</button>

@@ -2,33 +2,32 @@
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
-import { formatDate } from '../lib/posts';
+import { formatDate, titleTransitionName } from '../lib/posts';
 
-type Props = CollectionEntry<'blog'>['data'];
+type Props = CollectionEntry<'blog'>['data'] & { id: string };
 
-const { title, description, pubDate, updatedDate, heroImage, tags } = Astro.props;
+const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} image={heroImage?.src}>
+<BaseLayout title={title} description={description} image={heroImage?.src} stagger={false}>
   <article>
     <header>
-      <p class="muted meta">
+      <p class="muted meta rise">
         <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
         {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time></>}
       </p>
-      <h1>{title}</h1>
-      {tags.length > 0 && <p class="muted tags">{tags.map((t) => `#${t}`).join(' ')}</p>}
+      <h1 class="post-title" style={{ viewTransitionName: titleTransitionName(id) }}>{title}</h1>
     </header>
-    {heroImage && <Image src={heroImage} alt="" width={1200} loading="eager" />}
-    <div class="prose">
+    {heroImage && <Image class="rise" style="--i: 1" src={heroImage} alt="" width={1200} loading="eager" />}
+    <div class="prose rise" style="--i: 1">
       <slot />
     </div>
   </article>
-  <p><a href="/blog/">← All posts</a></p>
+  <p class="rise" style="--i: 2"><a href="/blog/">← All posts</a></p>
 </BaseLayout>
 
 <style>
-  .meta, .tags { margin: 0; font-size: 0.95rem; }
+  .meta { margin: 0; font-size: 0.95rem; }
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
   .prose :global(h2) { margin-top: 2.5rem; }
