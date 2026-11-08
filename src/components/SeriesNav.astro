@@ -1,0 +1,50 @@
+---
+// Where this post sits in the sync engine series. Parts that aren't written yet are listed
+// without a link.
+import { getPosts } from '../lib/posts';
+import { SYNC_SERIES } from '../lib/series';
+
+interface Props {
+  current: string;
+}
+
+const { current } = Astro.props;
+const published = new Set((await getPosts()).map((p) => p.id));
+const index = SYNC_SERIES.parts.findIndex((p) => p.slug === current);
+---
+
+<nav class="series" aria-label={`${SYNC_SERIES.name} series`}>
+  <p class="label">
+    {SYNC_SERIES.name} · part {index + 1} of {SYNC_SERIES.parts.length}
+  </p>
+  <ol>
+    {SYNC_SERIES.parts.map((part) => (
+      <li class:list={{ current: part.slug === current }}>
+        {part.slug === current ? (
+          <span aria-current="page">{part.title}</span>
+        ) : published.has(part.slug) ? (
+          <a href={`/blog/${part.slug}/`}>{part.title}</a>
+        ) : (
+          <span class="soon">{part.title} <span class="muted">· coming soon</span></span>
+        )}
+      </li>
+    ))}
+  </ol>
+</nav>
+
+<style>
+  .series {
+    margin: 2rem 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .label { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  ol { margin: 0; padding-left: 1.4rem; }
+  li { padding: 0.1rem 0; }
+  li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .current { font-weight: 600; }
+  .current::marker { color: var(--accent); }
+  .soon { color: var(--muted); }
+</style>

@@ -1,0 +1,213 @@
+---
+title: Before you build a sync engine
+description: What a sync engine actually does, why OT and CRDTs exist, when a ready-made tool is the right call, and what to read before you write one yourself.
+pubDate: 2026-11-08
+tags: [sync engines, crdt, collaboration]
+---
+
+import SyncPlayground from '../../components/sync/SyncPlayground.astro';
+import StackPicker from '../../components/sync/StackPicker.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+For the last couple of years I've been building [Flex](https://ceros.com/flex), a visual editor at Ceros where
+several people, and more recently AI agents, edit the same document at the same time. A big part of that work has
+been its sync engine, which works offline and keeps a full version history. We built it on [Yjs](https://yjs.dev),
+rebuilt the way changes flow through it once, and learnt most of what's in this series the hard way.
+
+The biggest lesson surprised me. The algorithms are the part that's already solved. What's hard is everything
+around them: how you shape your data, what you do when a merge produces nonsense, how you undo, restore and
+migrate while other people keep working. This first post is the map. The rest of the series goes deep on one
+problem at a time, each with a demo you can break yourself.
+
+<SeriesNav current="before-you-build-a-sync-engine" />
+
+## What a sync engine actually does
+
+Every copy of the document, on every device, has to end up the same, while each person keeps working on their
+own copy without waiting for the network. That splits into three jobs:
+
+1. **Moving changes**: getting an edit from one device to the others, in some order, eventually.
+2. **Merging changes**: deciding what happens when two edits were made without seeing each other.
+3. **Remembering**: persisting the result, recovering after a crash, and keeping the history you'll want for
+   undo and versions.
+
+The first one is plumbing. The third you can postpone for a while. The second is where every design decision
+comes from, so let's start there, with the simplest thing that could possibly work.
+
+## Attempt one: send the whole thing
+
+Each time someone types, send the whole text to the server, which stores it and passes it on. Whoever's copy
+arrives last wins. Try it: type in both boxes, or press **Type at once** and watch both people type while the
+messages are still in the air. Turn up the latency if it's too quick to follow.
+
+<SyncPlayground mode="naive">
+  Alice adds " world" while Bob adds "Oh, " in front. Each message carries a full copy, so each one
+  overwrites whatever the other person typed since. With real latency they rarely even end up with the same text.
+</SyncPlayground>
+
+Nothing here is a bug in the usual sense. Every message arrived, in order. The problem is that a copy of the
+whole text says nothing about *what the person did*. All the server sees is "this is the text now". To merge
+two people's work you need to send the edits themselves, and that's where the two families of solutions split.
+
+## Operational transformation: fix the positions
+
+Send operations instead of copies: "insert `w` at position 6", "delete position 3". The catch is that positions
+go stale. If Bob inserts four characters at the start while Alice's "insert at 6" is on its way, position 6 now
+points at the wrong place.
+
+Operational transformation (OT) fixes that by *transforming* late operations. A central server puts every
+operation in one order. When an operation arrives that was made before its author saw some of the others, the
+server shifts it past them: Bob put four characters in front, so Alice's insert at 6 becomes an insert at 10.
+Clients do the same for anything they're still waiting on the server to confirm. Watch the server's log:
+
+<SyncPlayground mode="ot">
+  Each client keeps one batch of edits in flight and waits for the server's "ack" before sending the next. The
+  server log shows each operation it had to move, and how far.
+</SyncPlayground>
+
+This is the model behind Google Docs, and libraries like [ShareDB](https://share.github.io/sharedb/). It's
+efficient: the document is just the document, with no extra metadata. Its weak spots are the ones you can feel
+in the demo. Everything goes through one server that has to keep the history of recent operations. Every pair of
+operation types needs a transform function, and getting all of them right gets hard fast once you go beyond plain
+text to trees, moves and formatting. And a client that's been offline for a week has a lot of transforming to
+catch up on.
+
+## CRDTs: stop using positions
+
+A CRDT (conflict-free replicated data type) avoids the problem instead of fixing it. Every character gets a
+unique, permanent id, such as "Alice's 7th edit", and an insert says "put `w` after character `a6`" instead of
+"at position 6". Ids never go stale, so operations can be applied in any order, any number of times, on any copy,
+and every copy still ends up the same. No transforming, and no server needed to decide the order.
+
+Switch on the internals and edit offline to see it: each box shows the characters with their ids. Deleted
+characters stay behind as *tombstones*, because someone else's insert might still point at them.
+
+<SyncPlayground mode="crdt">
+  This is RGA, one of the simplest sequence CRDTs; Yjs uses YATA, a close relative. When two people type at the
+  same spot, the newer id goes first. That rule is arbitrary, but every copy applies the same one, so they all
+  agree.
+</SyncPlayground>
+
+The price is metadata. Every character carries an id and a pointer, and deletions never fully go away. Libraries
+like Yjs are very good at compacting this. Joseph Gentle's [5000x faster CRDTs](https://josephg.com/blog/crdts-go-brrr/)
+explains how. But it's still real memory and real bytes in every snapshot. You also give up some control: the merge rules are the library's,
+not yours. That becomes important in the next part.
+
+## The option most products actually use
+
+There's a third model, and it's the one behind a lot of products we think of as the gold standard. Keep a
+central server as the single source of truth. Clients apply their own changes straight away and send them on.
+The server applies changes in the order they arrive, and resolves conflicts with **last write wins per field**,
+not per document. Each client then replays the changes the server hasn't confirmed yet on top of the latest
+server state.
+
+[Figma works roughly like this](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/). Its
+multiplayer post says plainly that it isn't a true CRDT, since the server can be the authority. [Linear's sync
+engine](https://linear.app/now/scaling-the-linear-sync-engine) is a server-ordered stream of changes, with conflicts
+settled per field ([someone reverse-engineered it](https://github.com/wzhudev/reverse-linear-sync-engine), and it's a
+good read). [Replicache](https://doc.replicache.dev/concepts/how-it-works)
+(and its successor, Zero) turned the same idea into a product. It works because most app data is records with
+fields, not long sequences of characters. Two people rarely edit the same field of the same issue at the same
+moment, and when they do, "last one wins" is what they expect.
+
+|                        | OT                          | CRDT                              | Server decides, per field         |
+| ---------------------- | --------------------------- | --------------------------------- | --------------------------------- |
+| Needs a central server | Yes, for ordering           | No (you'll still want one)        | Yes, it's the authority           |
+| Good at                | Text, with few op types     | Text, lists, trees, offline       | Records with fields               |
+| Long offline           | Painful                     | Natural                           | Fine, if you can replay changes   |
+| Extra metadata         | Recent op history           | Ids and tombstones on everything  | Little                            |
+| Who owns merge rules   | You (transform functions)   | The library                       | You (validation on the server)    |
+
+My rough rule: shared text, or deeply nested documents people edit offline → CRDT. Records with fields →
+server-authoritative. OT today is mostly worth it if you're already on ShareDB or a similar stack.
+
+There's one more thing to know before you pick. A CRDT guarantees that every copy *converges*, meaning they all
+end up the same. It doesn't guarantee that the result *makes sense*. Two perfectly merged fields can together
+describe something your app can't render. That's [part two](#series).
+
+## Ready-made is fine. Really.
+
+If you're adding collaboration to a product, rather than building a product *about* collaboration, use something
+off the shelf. The plumbing (WebSockets, reconnects, auth, persistence, presence, scaling rooms across servers)
+is a lot of work that doesn't make your product different. The tools are good now:
+
+- **Hosted**: [Liveblocks](https://liveblocks.io) gives you rooms, presence, conflict-free storage (objects,
+  lists and maps with undo/redo built in), a hosted Yjs backend, and comments. Their
+  [undo/redo article](https://liveblocks.io/blog/how-to-build-undo-redo-in-a-multiplayer-environment) is the
+  reason this series has demos.
+- **Yjs servers you run yourself**: [Hocuspocus](https://tiptap.dev/docs/hocuspocus/introduction) from the Tiptap
+  team, [y-sweet](https://github.com/jamsocket/y-sweet), and PartyKit. PartyKit is now part of Cloudflare as
+  [PartyServer](https://github.com/cloudflare/partykit), which gives each document its own Durable Object.
+- **CRDT libraries**: [Yjs](https://yjs.dev) (the biggest ecosystem of editor bindings),
+  [Automerge](https://automerge.org) (a JSON-like document with full history), and [Loro](https://loro.dev)
+  (fast, with movable lists, trees and version control built in).
+- **Sync engines for app data**: [Zero](https://zero.rocicorp.dev), [ElectricSQL](https://electric-sql.com) and
+  [PowerSync](https://www.powersync.com) sync parts of your Postgres to the client. [InstantDB](https://www.instantdb.com)
+  and [Convex](https://www.convex.dev) give you a hosted backend whose queries update live.
+
+Not sure where you land? Answer four questions:
+
+<StackPicker />
+
+## When building your own is worth it
+
+We went custom on Flex, so I'm not going to tell you never to. In my experience it pays off when several of these
+are true:
+
+- **You have to own the data.** Your customers need to know where their data lives and who can reach it, so
+  someone else's cloud isn't an option. This came first for us: Ceros sells to enterprises, and they care about
+  data security.
+- **You need a say in every change.** You have to validate, normalise or reject edits before they land, enforce
+  permissions on parts of a document, or let AI agents edit next to people safely. On Flex we wanted room to grow
+  into fine-grained permissions, and owning the pipeline is what made AI edits straightforward to add. It moved us
+  from simply syncing state both ways to a pipeline where every change states what it means to do and is checked
+  before it's applied.
+- **Sync is the product.** Collaboration is why people choose you, so its edge cases are your problem whatever
+  you use.
+- **Your data has an awkward shape.** Trees where things move, like a DOM, documents mixing text with layout,
+  fields that only make sense together.
+- **Offline, history and versions all at once.** Each is manageable alone. Together they touch every decision.
+- **Cost** at a scale where a per-connection price stops working.
+
+Even then, "your own" should mean your own server, data model and rules on top of a CRDT library, not your own
+CRDT. We use Yjs and haven't once wanted to write the merge algorithm ourselves.
+
+## Read this first
+
+What I'd read and listen to before writing any sync code, roughly in this order:
+
+- **Evan Wallace, [How Figma's multiplayer technology works](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/)**:
+  the clearest argument for a server-authoritative design, and why "not quite a CRDT" can be the right call.
+- **Figma, [Realtime editing of ordered sequences](https://www.figma.com/blog/realtime-editing-of-ordered-sequences/)**:
+  fractional indexing, which comes back in part four.
+- **Tuomas Artman, [Scaling the Linear sync engine](https://linear.app/now/scaling-the-linear-sync-engine)**, and
+  Wenzhao Hu's [reverse-engineering of it](https://github.com/wzhudev/reverse-linear-sync-engine): how far records,
+  last-write-wins and a local cache can take you.
+- **Ink & Switch, [Local-first software](https://www.inkandswitch.com/local-first/)**: the essay that started a
+  movement, and a good test of how much of it your product actually needs.
+- **Martin Kleppmann, [CRDTs: the hard parts](https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html)**:
+  interleaving, moves and tree edits explained by the person who wrote the papers.
+- **Joseph Gentle, [I was wrong. CRDTs are the future](https://josephg.com/blog/crdts-are-the-future/)**: from
+  someone who built OT for Google Wave.
+- **Kevin Jahns, [Are CRDTs suitable for shared editing?](https://blog.kevinjahns.de/are-crdts-suitable-for-shared-editing/)**:
+  the author of Yjs on performance and memory.
+- **Matt Weidner's [CRDT survey](https://mattweidner.com/2023/09/26/crdt-survey-1.html)**: a practical
+  taxonomy you'll come back to.
+- **Paul Butler, [You might not need a CRDT](https://jamsocket.com/blog/you-might-not-need-a-crdt)**: the
+  counterweight to everything above.
+- **[localfirst.fm](https://www.localfirst.fm)**: a podcast with the people building most of the tools on this page.
+
+Short on time and want to go straight to code? I'd start with [tldraw's sync
+codebase](https://github.com/tldraw/tldraw/tree/main/packages/sync-core), then the
+[Linear talk](https://linear.app/now/scaling-the-linear-sync-engine) and its
+[reverse-engineering](https://github.com/wzhudev/reverse-linear-sync-engine).
+
+<div id="series">
+  <SeriesNav current="before-you-build-a-sync-engine" />
+</div>
+
+Next up: the CRDT merged everything perfectly, and the document still broke. What "conflict-free" doesn't
+promise, and how to shape your data so it holds.
+
+If you're weighing up your own sync setup and want a second opinion on the approach, [get in touch](/contact/).
+I'm happy to talk it through.
