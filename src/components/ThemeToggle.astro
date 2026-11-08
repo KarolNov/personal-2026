@@ -47,14 +47,18 @@
       const rect = button.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
       const y = rect.top + rect.height / 2;
-      const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
 
       root.classList.add('theme-transition');
       const transition = (latest = document.startViewTransition(() => apply(next)));
       transition.ready.then(() => {
+        // The snapshot also covers the area behind mobile toolbars, which innerHeight leaves
+        // out, so size the circle in %: 142% of the box's normalised diagonal (diagonal / √2)
+        // is its full diagonal, enough to reach the farthest corner from any point.
+        // easeOutQuad answers the click quickly without the long tail that made the last
+        // corner of a tall screen crawl.
         root.animate(
-          { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
-          { duration: 750, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', pseudoElement: '::view-transition-new(root)' },
+          { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(142% at ${x}px ${y}px)`] },
+          { duration: 750, easing: 'cubic-bezier(0.5, 1, 0.89, 1)', pseudoElement: '::view-transition-new(root)' },
         );
       });
       // A rapid second click skips this transition; leave the class for the newer one.
