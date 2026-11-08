@@ -20,5 +20,17 @@
   },
   // Email Routing send binding used by the contact form. Unrestricted, so it can send to any
   // verified destination address on the account (CONTACT_TO must be verified).
-  "send_email": [{ "name": "EMAIL" }]
+  "send_email": [{ "name": "EMAIL" }],
+  // Workers Previews (per-branch URLs) don't inherit the settings above.
+  // Secrets come from the Previews base config: `npx wrangler preview base-config secret put <NAME>`
+  "previews": {
+    "vars": {
+      "CONTACT_FROM": "blog@karolnov.dev",
+      // Turnstile test sitekey (always passes, works on any hostname); pair it with the test
+      // secret 1x0000000000000000000000000000000AA. Test tokens verify as hostname example.com.
+      "TURNSTILE_SITEKEY": "1x00000000000000000000AA",
+      "TURNSTILE_HOSTNAMES": "example.com"
+    },
+    "send_email": [{ "name": "EMAIL" }]
+  }
 }
