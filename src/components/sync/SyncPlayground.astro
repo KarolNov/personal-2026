@@ -198,8 +198,9 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     white-space: nowrap;
   }
   .queued.down { bottom: auto; top: 0; translate: -50% -55%; }
-  .queued.down[data-down='alice'] { left: 30%; --who: var(--alice); }
-  .queued.down[data-down='bob'] { left: 70%; --who: var(--bob); }
+  /* Either side of where the wires meet. */
+  .queued.down[data-down='alice'] { left: calc(50% - 3.2rem); --who: var(--alice); }
+  .queued.down[data-down='bob'] { left: calc(50% + 3.2rem); --who: var(--bob); }
   .queued[hidden] { display: none; }
 
   .items { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 0.5rem; }
@@ -595,7 +596,8 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
         const p = peers[id].el.getBoundingClientRect();
         const x1 = p.left + p.width / 2 - box.left;
         const y1 = p.bottom - box.top;
-        const x2 = s.left + s.width * (id === 'alice' ? 0.3 : 0.7) - box.left;
+        // Both wires meet at one point on the server, so a relayed packet leaves where it landed.
+        const x2 = s.left + s.width / 2 - box.left;
         const y2 = s.top - box.top;
         const my = (y1 + y2) / 2;
         peers[id].wire.setAttribute('d', `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`);
