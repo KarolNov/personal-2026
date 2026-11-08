@@ -1,0 +1,79 @@
+---
+import { actions, isInputError } from 'astro:actions';
+import { env } from 'cloudflare:workers';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Rendered on demand so the form works without JavaScript (POST → action → re-render).
+export const prerender = false;
+
+const result = Astro.getActionResult(actions.contact);
+const fieldErrors = isInputError(result?.error) ? result.error.fields : {};
+const sent = result && !result.error;
+const failed = result?.error && !isInputError(result.error);
+const sitekey = env.TURNSTILE_SITEKEY;
+---
+
+<BaseLayout title="Contact" description="Get in touch.">
+  <script slot="head" is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <h1>Contact</h1>
+  <p class="muted">Have a question, an idea or just want to say hi? Drop me a line.</p>
+
+  {sent ? (
+    <p class="notice success" role="status">Thanks! Your message is on its way — I'll get back to you soon.</p>
+  ) : (
+    <form method="POST" action={actions.contact} novalidate>
+      {failed && <p class="notice error" role="alert">{result.error.message}</p>}
+
+      <label>
+        <span>Name</span>
+        <input name="name" autocomplete="name" required maxlength="100" aria-invalid={fieldErrors.name ? 'true' : undefined} />
+        {fieldErrors.name && <small class="error">{fieldErrors.name.join(' ')}</small>}
+      </label>
+
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" autocomplete="email" required maxlength="200" aria-invalid={fieldErrors.email ? 'true' : undefined} />
+        {fieldErrors.email && <small class="error">{fieldErrors.email.join(' ')}</small>}
+      </label>
+
+      <label>
+        <span>Message</span>
+        <textarea name="message" rows="6" required minlength="10" maxlength="5000" aria-invalid={fieldErrors.message ? 'true' : undefined}></textarea>
+        {fieldErrors.message && <small class="error">{fieldErrors.message.join(' ')}</small>}
+      </label>
+
+      <label class="sr-only" aria-hidden="true">
+        Leave this field empty
+        <input name="website" tabindex="-1" autocomplete="off" />
+      </label>
+
+      <div class="cf-turnstile" data-sitekey={sitekey} data-action="contact"></div>
+      <noscript><p class="notice error">Please enable JavaScript — it's needed for the spam check.</p></noscript>
+
+      <button class="button" type="submit">Send message</button>
+    </form>
+  )}
+</BaseLayout>
+
+<style>
+  form { display: grid; gap: 1.25rem; margin-top: 2rem; }
+  label { display: grid; gap: 0.35rem; font-weight: 600; font-size: 0.95rem; }
+  input, textarea {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    font-weight: 400;
+  }
+  textarea { resize: vertical; }
+  [aria-invalid='true'] { border-color: var(--danger); }
+  small.error { color: var(--danger); font-weight: 400; }
+  button { justify-self: start; }
+  .cf-turnstile { min-height: 65px; }
+  .notice { padding: 0.9rem 1rem; border-radius: var(--radius); border: 1px solid currentColor; }
+  .notice.success { color: var(--success); }
+  .notice.error { color: var(--danger); }
+</style>

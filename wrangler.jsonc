@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "personal-2026",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Static assets (dist/client) are wired up by the Astro adapter at build time.
+  "assets": { "binding": "ASSETS" },
+  // Serve the Worker on beta.karolnov.dev for now (the karolnov.dev zone must be on this Cloudflare account).
+  // To go live on the apex: change this pattern, TURNSTILE_HOSTNAMES below and `site` in astro.config.mjs.
+  "routes": [{ "pattern": "beta.karolnov.dev", "custom_domain": true }],
+  "observability": { "enabled": true },
+  // Secrets (not in this file): CONTACT_TO, TURNSTILE_SECRET — set with `npx wrangler secret put <NAME>`
+  "vars": {
+    "CONTACT_FROM": "blog@karolnov.dev",
+    // Turnstile: public sitekey and the frontend hostnames siteverify must report.
+    // The secret is set separately: `npx wrangler secret put TURNSTILE_SECRET`
+    "TURNSTILE_SITEKEY": "0x4AAAAAAF3cSVRX_X6uq4lF",
+    "TURNSTILE_HOSTNAMES": "beta.karolnov.dev"
+  },
+  // Email Routing send binding used by the contact form. Unrestricted, so it can send to any
+  // verified destination address on the account (CONTACT_TO must be verified).
+  "send_email": [{ "name": "EMAIL" }],
+  // Workers Previews (per-branch URLs) don't inherit the settings above.
+  // Secrets come from the Previews base config: `npx wrangler preview base-config secret put <NAME>`
+  "previews": {
+    "vars": {
+      "CONTACT_FROM": "blog@karolnov.dev",
+      // Turnstile test sitekey (always passes, works on any hostname); pair it with the test
+      // secret 1x0000000000000000000000000000000AA. Test tokens verify as hostname example.com.
+      "TURNSTILE_SITEKEY": "1x00000000000000000000AA",
+      "TURNSTILE_HOSTNAMES": "example.com"
+    },
+    "send_email": [{ "name": "EMAIL" }]
+  }
+}

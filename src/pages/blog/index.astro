@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import { getPosts } from '../../lib/posts';
+
+const posts = await getPosts();
+---
+
+<BaseLayout title="Blog" description="Notes, essays and write-ups.">
+  <h1>Blog</h1>
+  <p class="muted">Notes, essays and write-ups. Subscribe via <a href="/rss.xml">RSS</a>.</p>
+  <PostList posts={posts} />
+</BaseLayout>
+
+<style>
+  p { margin-bottom: 2.5rem; }
+</style>

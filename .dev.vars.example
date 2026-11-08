@@ -1,0 +1,10 @@
+# Copy to .dev.vars for local development (ignored by git).
+# These are Cloudflare's documented Turnstile *testing* keys: the widget always passes
+# and siteverify always succeeds. Never use them in production.
+TURNSTILE_SITEKEY=1x00000000000000000000AA
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+TURNSTILE_HOSTNAMES=localhost,127.0.0.1,example.com
+
+# Where contact form messages are delivered (production: `npx wrangler secret put CONTACT_TO`).
+# Locally, email is simulated and written to .wrangler/tmp/email/.
+CONTACT_TO=you@example.com

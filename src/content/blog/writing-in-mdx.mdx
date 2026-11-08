@@ -1,0 +1,22 @@
+---
+title: Writing posts in MDX
+description: A quick reference for authoring posts on this site.
+pubDate: 2026-11-06
+tags: [meta, howto]
+draft: true
+---
+
+export const Callout = ({ children }) => (
+  <blockquote>{children}</blockquote>
+);
+
+This post is a **draft** — it only appears when running `npm run dev`.
+
+<Callout>MDX lets you drop components straight into your writing.</Callout>
+
+Frontmatter fields: `title`, `description`, `pubDate`, optional `updatedDate`, `heroImage`,
+`tags` and `draft`.
+
+```ts
+const greeting: string = 'hello';
+```
