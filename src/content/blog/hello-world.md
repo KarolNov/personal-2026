@@ -22,5 +22,5 @@ This site isn't a single `index.html` file, but it performs like a static site. 
     - understanding and optimising performance on the web
     - AI-enhanced software development
 
-If any of this resonates, or you're working on something similar, [get in touch](/contact). I'm always happy to talk shop.
+If any of this resonates, or you're working on something similar, [get in touch](/contact/). I'm always happy to talk shop.
 
