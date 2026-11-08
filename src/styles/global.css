@@ -1,33 +1,27 @@
 :root {
-  --bg: #fbfaf8;
-  --fg: #1c1b19;
-  --muted: #6b6760;
-  --border: #e6e2db;
-  --accent: #2f5bd3;
-  --accent-fg: #ffffff;
-  --surface: #ffffff;
-  --danger: #b42318;
-  --success: #067647;
+  /* Each token is light-dark(light, dark). `color-scheme` picks the side: it follows the
+     OS by default, and [data-theme] (set by the toggle in the header) pins it. */
+  color-scheme: light dark;
+  --bg: light-dark(#fbfaf8, #141112);
+  --fg: light-dark(#1c1b19, #ede8e6);
+  --muted: light-dark(#6b6760, #9e9693);
+  --border: light-dark(#e6e2db, #2c2526);
+  --surface: light-dark(#ffffff, #1c1718);
+  /* Brighter crimson on light; deep maroon on dark, with a rosier tint where it's used as text. */
+  --accent: light-dark(#c41e3a, #e06c78);
+  --accent-bg: light-dark(#c41e3a, #8a1c2b);
+  --accent-fg: light-dark(#ffffff, #f6e9eb);
+  --selection: light-dark(#f6d3d8, #4a1820);
+  --danger: light-dark(#b42318, #f97066);
+  --success: light-dark(#067647, #47cd89);
   --radius: 10px;
   --max: 42rem;
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  color-scheme: light dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121211;
-    --fg: #ecebe8;
-    --muted: #9b978f;
-    --border: #2a2927;
-    --accent: #7d9cff;
-    --accent-fg: #0b0b0a;
-    --surface: #1a1918;
-    --danger: #f97066;
-    --success: #47cd89;
-  }
-}
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -66,7 +60,7 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
   padding: 0.6rem 1.1rem;
   border: 0;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: var(--accent-bg);
   color: var(--accent-fg);
   font: inherit;
   font-weight: 600;
@@ -77,3 +71,26 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 .button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+::selection { background: var(--selection); }
+
+/* View transitions — cross-document, no client router. The header stays put while the
+   page content fades and lifts; post titles (named per post) morph between list and page. */
+@view-transition { navigation: auto; }
+
+::view-transition-group(*) { animation-duration: 320ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+::view-transition-old(page) { animation: 160ms ease-in both page-out; }
+::view-transition-new(page) { animation: 320ms cubic-bezier(0.2, 0, 0, 1) 60ms both page-in; }
+
+@keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
+.theme-transition * { view-transition-name: none !important; }
+.theme-transition::view-transition { pointer-events: none; }
+.theme-transition::view-transition-old(root),
+.theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+}
