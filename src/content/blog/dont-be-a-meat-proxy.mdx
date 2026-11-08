@@ -6,6 +6,8 @@ tags: [ai, communication, async]
 draft: true
 ---
 
+import MeatProxyChat from '../../components/ai/MeatProxyChat.astro';
+
 You've probably seen this happen. Someone asks a question in a thread. A colleague pastes it into an LLM, copies
 the answer and posts it back: eight paragraphs, three headings, a bulleted list of "key considerations" and a
 neat summary at the end. It looks thorough. Nobody reads it.
@@ -13,6 +15,13 @@ neat summary at the end. It looks thorough. Nobody reads it.
 It isn't that the text is wrong. It might be fine. The problem is that nobody can tell which parts the person
 posting it actually thinks, which parts they checked and which they never read, or what they want anyone to do
 next. They passed a message between two machines and added nothing on the way. They acted as a meat proxy.
+
+Here's what that looks like on a product team, and what it looks like when a person answers instead:
+
+<MeatProxyChat>
+  Same question, two answers. One took seconds to write and still doesn't answer it. The other took a few minutes,
+  and Maya can act on it straight away. Inspired by [dontbeameatproxy.com](https://dontbeameatproxy.com).
+</MeatProxyChat>
 
 A lot of organisations have run into this in the last year or two. It's easy to do, and it feels like being
 helpful.
@@ -89,6 +98,13 @@ A short checklist I now run through before posting anything AI helped with:
 
 None of this is new. Good teams worked this way before AI. What changed is that skipping it got much easier, and
 the people paying for it are everyone else.
+
+## Further reading
+
+- **[Don't be a meat proxy](https://dontbeameatproxy.com)**: a short, sharp one-pager on exactly this. Worth
+  bookmarking for the next time you need to send it to someone.
+- **Arron Woods, [More than writers of code](https://www.arronwoods.com/blog/2026/01-more-than-writers-of-code)**:
+  the same problem from the engineering side, and what to check before your code reaches a reviewer.
 
 Next time: the same idea from the other side. Not how you talk to people, but how you talk to the AI, and why
 it does its best work when you give it something solid to lean on instead of a long prompt.
