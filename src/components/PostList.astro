@@ -19,7 +19,7 @@ const { posts, stagger } = Astro.props;
       <li class:list={{ rise: stagger !== undefined }} style={stagger !== undefined ? { '--i': stagger + i } : undefined}>
         <time class="muted" datetime={post.data.pubDate.toISOString()}>{formatDate(post.data.pubDate)}</time>
         <div>
-          <a class="post-title" href={`/blog/${post.id}/`} style={{ viewTransitionName: titleTransitionName(post.id) }}>{post.data.title}</a>
+          <a class="post-title" href={`/blog/${post.id}/`} data-vt-name={titleTransitionName(post.id)}>{post.data.title}</a>
           <p class="muted">{post.data.description}</p>
         </div>
       </li>

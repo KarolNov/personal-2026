@@ -77,9 +77,10 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 
 ::selection { background: var(--selection); }
 
-/* Page entrance: content rises in, staggered 40ms per item. `main` staggers its direct
-   children; pages that want finer steps opt out and mark items with .rise and --i. */
-.rise, .stagger > * { animation: rise 280ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+/* Page entrance: content rises in, staggered 40ms per item. `backwards` holds the start state
+   only during the delay; keeping the end state (`both`) left stale layers that didn't repaint.
+   `main` staggers its direct children; pages that want finer steps opt out and mark items with .rise and --i. */
+.rise, .stagger > * { animation: rise 280ms var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
 .stagger > :nth-child(2) { --i: 1; }
 .stagger > :nth-child(3) { --i: 2; }
 .stagger > :nth-child(4) { --i: 3; }
@@ -89,7 +90,7 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 
 /* View transitions — cross-document, no client router. The header stays put, the old page
    fades out, and the new one is revealed by the stagger above. Post titles morph between
-   the list and the post page. */
+   a list and that post's page; list links are only named for those navigations (BaseHead). */
 @view-transition { navigation: auto; }
 
 ::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
