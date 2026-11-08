@@ -112,8 +112,8 @@ export function initScrollBall() {
     // so the ball and its trail don't sway. Size keeps a little bounce when stretching into an
     // underline, but retracts crisply with none, so the ball never dips to nothing on the way back.
     const SPRING = {
-      x: { stiffness: 200, damping: 28 },
-      y: { stiffness: 200, damping: 28 },
+      x: { stiffness: 320, damping: 36 },
+      y: { stiffness: 320, damping: 36 },
       w: { stiffness: 220, damping: 20 },
       h: { stiffness: 220, damping: 20 },
     };
@@ -173,7 +173,7 @@ export function initScrollBall() {
     // stretches out even if you then drift past, and the underline lingers a moment before moving
     // on. A fast scroll cancels any landing still on its way, so the ball rides along with you
     // and never lags behind replaying stops you've already left.
-    const LINGER_MS = 200;
+    const LINGER_MS = 120;
     const FAST_PX_PER_S = 1500;
     let landedAt = 0;
     let pending: { el: HTMLElement; box: Box } | null = null;
@@ -300,7 +300,7 @@ export function initScrollBall() {
       restTimer = window.setTimeout(() => {
         speed = 0;
         update();
-      }, 120);
+      }, 80);
       update();
     }
 

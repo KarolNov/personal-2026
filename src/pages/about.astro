@@ -203,12 +203,6 @@ const roles = [
     .touch:hover:not(.lit) { background: var(--accent-bg); }
   }
 
-  /* Gentle snapping to each role, only where a role fits on screen. */
-  @media (min-width: 48rem) and (prefers-reduced-motion: no-preference) {
-    :global(html) { scroll-snap-type: y proximity; }
-    .roles > li { scroll-snap-align: start; scroll-margin-top: 2rem; }
-  }
-
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
