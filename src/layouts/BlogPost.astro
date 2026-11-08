@@ -6,7 +6,7 @@ import { formatDate, titleTransitionName } from '../lib/posts';
 
 type Props = CollectionEntry<'blog'>['data'] & { id: string };
 
-const { id, title, description, pubDate, updatedDate, heroImage, tags } = Astro.props;
+const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} image={heroImage?.src} stagger={false}>
@@ -17,18 +17,17 @@ const { id, title, description, pubDate, updatedDate, heroImage, tags } = Astro.
         {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time></>}
       </p>
       <h1 class="post-title" style={{ viewTransitionName: titleTransitionName(id) }}>{title}</h1>
-      {tags.length > 0 && <p class="muted tags rise" style="--i: 1">{tags.map((t) => `#${t}`).join(' ')}</p>}
     </header>
-    {heroImage && <Image class="rise" style="--i: 2" src={heroImage} alt="" width={1200} loading="eager" />}
-    <div class="prose rise" style="--i: 2">
+    {heroImage && <Image class="rise" style="--i: 1" src={heroImage} alt="" width={1200} loading="eager" />}
+    <div class="prose rise" style="--i: 1">
       <slot />
     </div>
   </article>
-  <p class="rise" style="--i: 3"><a href="/blog/">← All posts</a></p>
+  <p class="rise" style="--i: 2"><a href="/blog/">← All posts</a></p>
 </BaseLayout>
 
 <style>
-  .meta, .tags { margin: 0; font-size: 0.95rem; }
+  .meta { margin: 0; font-size: 0.95rem; }
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
   .prose :global(h2) { margin-top: 2.5rem; }
