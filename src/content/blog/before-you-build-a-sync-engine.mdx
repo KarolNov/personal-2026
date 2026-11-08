@@ -105,8 +105,10 @@ not per document. Each client then replays the changes the server hasn't confirm
 server state.
 
 [Figma works roughly like this](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/). Its
-multiplayer post says plainly that it isn't a true CRDT, since the server can be the authority. Linear's sync
-engine is a server-ordered stream of changes, with conflicts settled per field. [Replicache](https://doc.replicache.dev/concepts/how-it-works)
+multiplayer post says plainly that it isn't a true CRDT, since the server can be the authority. [Linear's sync
+engine](https://linear.app/now/scaling-the-linear-sync-engine) is a server-ordered stream of changes, with conflicts
+settled per field ([someone reverse-engineered it](https://github.com/wzhudev/reverse-linear-sync-engine), and it's a
+good read). [Replicache](https://doc.replicache.dev/concepts/how-it-works)
 (and its successor, Zero) turned the same idea into a product. It works because most app data is records with
 fields, not long sequences of characters. Two people rarely edit the same field of the same issue at the same
 moment, and when they do, "last one wins" is what they expect.
@@ -155,16 +157,20 @@ Not sure where you land? Answer four questions:
 We went custom on Flex, so I'm not going to tell you never to. In my experience it pays off when several of these
 are true:
 
-- **Sync is the product.** Collaboration is why people choose you, so its edge cases are your problem whatever
-  you use.
+- **You have to own the data.** Your customers need to know where their data lives and who can reach it, so
+  someone else's cloud isn't an option. This came first for us: Ceros sells to enterprises, and they care about
+  data security.
 - **You need a say in every change.** You have to validate, normalise or reject edits before they land, enforce
-  permissions on parts of a document, or let AI agents edit next to people safely. On Flex this is what moved us
+  permissions on parts of a document, or let AI agents edit next to people safely. On Flex we wanted room to grow
+  into fine-grained permissions, and owning the pipeline is what made AI edits straightforward to add. It moved us
   from simply syncing state both ways to a pipeline where every change states what it means to do and is checked
   before it's applied.
+- **Sync is the product.** Collaboration is why people choose you, so its edge cases are your problem whatever
+  you use.
 - **Your data has an awkward shape.** Trees where things move, like a DOM, documents mixing text with layout,
   fields that only make sense together.
 - **Offline, history and versions all at once.** Each is manageable alone. Together they touch every decision.
-- **Cost or data residency** at a scale where a per-connection price or someone else's cloud stops working.
+- **Cost** at a scale where a per-connection price stops working.
 
 {/* TODO(Karol): the moment you knew the off-the-shelf route wouldn't hold for Flex. */}
 
@@ -179,10 +185,9 @@ What I'd read and listen to before writing any sync code, roughly in this order:
   the clearest argument for a server-authoritative design, and why "not quite a CRDT" can be the right call.
 - **Figma, [Realtime editing of ordered sequences](https://www.figma.com/blog/realtime-editing-of-ordered-sequences/)**:
   fractional indexing, which comes back in part four.
-- **Tuomas Artman's talks on Linear's sync engine**, and the community's
-  [reverse-engineering of it](https://github.com/wzhudev/reverse-linear-sync-engine): how far records,
+- **Tuomas Artman, [Scaling the Linear sync engine](https://linear.app/now/scaling-the-linear-sync-engine)**, and
+  Wenzhao Hu's [reverse-engineering of it](https://github.com/wzhudev/reverse-linear-sync-engine): how far records,
   last-write-wins and a local cache can take you.
-  {/* TODO(Karol): link the specific Linear talk you'd recommend. */}
 - **Ink & Switch, [Local-first software](https://www.inkandswitch.com/local-first/)**: the essay that started a
   movement, and a good test of how much of it your product actually needs.
 - **Martin Kleppmann, [CRDTs: the hard parts](https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html)**:

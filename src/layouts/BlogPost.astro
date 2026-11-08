@@ -34,4 +34,27 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
   .prose :global(blockquote) {
     margin: 1.5rem 0; padding-left: 1rem; border-left: 3px solid var(--border); color: var(--muted);
   }
+  /* Tables bleed past the text column like the playgrounds do. `separate` borders keep the
+     rounded outline; cells draw only their bottom and left edges. */
+  .prose :global(table) {
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    border-collapse: separate; border-spacing: 0;
+    font-size: 0.9rem; line-height: 1.45;
+  }
+  .prose :global(:is(th, td)) {
+    padding: 0.55rem 0.8rem; text-align: left; vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+  .prose :global(:is(th, td) + :is(th, td)) { border-left: 1px solid var(--border); }
+  .prose :global(tbody tr:last-child > *) { border-bottom: 0; }
+  .prose :global(thead th) { font-weight: 600; }
+  .prose :global(tbody td:first-child) { font-weight: 500; }
+  /* Markdown tables get no wrapper, so on phones the table itself becomes the scroll box. */
+  @media (max-width: 40rem) {
+    .prose :global(table) { display: block; overflow-x: auto; }
+  }
 </style>
