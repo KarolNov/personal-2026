@@ -16,8 +16,8 @@
   --success: light-dark(#067647, #47cd89);
   --radius: 10px;
   --max: 42rem;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
   /* Motion: strong ease-out for things entering/leaving, ease-in-out for things moving on screen. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
