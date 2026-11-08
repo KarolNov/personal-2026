@@ -256,13 +256,17 @@ export function initScrollBall() {
       ctx!.fill();
     }
 
-    // A ball at the left end of an underline.
+    // A ball at the left end of an underline, and level with it on the track.
     const ballAt = (b: Box): Box => ({ x: b.x, y: b.y + b.h / 2 - dot / 2, w: dot, h: dot });
+    const trackAt = (y: number): Box => ({ x: trackX(), y, w: dot, h: dot });
+    const onTrack = () => Math.abs(pos.x - trackX()) < 1;
 
-    // Shape changes happen in place, never while travelling: an underline first shrinks into a
-    // ball at its left end, then the ball moves off to the track; a ball first moves to the left
-    // end of its heading's underline, then stretches out from there. So only a round ball ever
-    // moves, and scrolling back and forth mid-change never drags a half-shrunk line around.
+    // Shape changes happen in place, and only a round ball ever moves, so scrolling back and
+    // forth mid-change never drags a half-shrunk line around. Leaving a stop, the underline
+    // shrinks into a ball at its left end, slides straight across to the track, then rides it.
+    // Arriving, the ball rides the track until it's level with the heading, slides straight
+    // across to the underline's left end, then stretches out. Up and down travel only ever
+    // happens on the track, clear of the text.
     // The ball lands on a stop when you settle on it, not while you fly past: it heads for a stop
     // reached while scrolling slowly, or where scrolling comes to rest, but only stretches out if
     // you're still there when it arrives, so a stop you've already left never flashes up. Once
@@ -285,7 +289,14 @@ export function initScrollBall() {
         return lingering(now) ? lineBox : ballAt(lineBox);
       }
       const stop = next();
-      return stop ? ballAt(stop.box) : goal;
+      if (stop) {
+        const end = ballAt(stop.box);
+        // Level with the heading: slide across to it.
+        if (Math.abs(pos.y - end.y) < 1.5) return end;
+        // Off the track (e.g. just left another stop): get back on it first, then ride.
+        return onTrack() ? trackAt(end.y) : trackAt(pos.y);
+      }
+      return onTrack() ? goal : trackAt(pos.y);
     }
 
     function step(now: number) {
@@ -316,7 +327,7 @@ export function initScrollBall() {
         // Already scrolled past it: skip it and ride on.
         pending = null;
         moving = true;
-      } else if (!line && next() && Math.hypot(pos.x - aim.x, pos.y - aim.y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
+      } else if (!line && next() && Math.hypot(pos.x - ballAt(next()!.box).x, pos.y - ballAt(next()!.box).y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
         // Close enough, and not still flying past: start stretching.
         const stop = next()!;
         line = stop.el;
