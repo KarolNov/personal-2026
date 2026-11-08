@@ -11,6 +11,8 @@ export default defineConfig({
   adapter: cloudflare({
     // Optimise images at build time — no Cloudflare Images binding needed.
     imageService: 'compile',
+    // Prerender in Node, not workerd: the post share cards (src/pages/og) use resvg's native binary.
+    prerenderEnvironment: 'node',
   }),
   // Sessions are unused; disabling them avoids provisioning a KV namespace.
   session: false,
