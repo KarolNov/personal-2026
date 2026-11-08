@@ -115,8 +115,9 @@ const roles = [
 
   <section>
     <h2>Elsewhere</h2>
-    <p>
-      <a class="touch" href="/contact/">Get in touch</a> <span class="muted">or find me on</span> <a href="https://github.com/KarolNov">GitHub</a> · <a href="https://www.linkedin.com/in/karol-nov/">LinkedIn</a>
+    <p class="elsewhere">
+      <a class="touch" href="/contact/">Get in touch</a>
+      <span><span class="muted">or find me on</span> <a href="https://github.com/KarolNov">GitHub</a> · <a href="https://www.linkedin.com/in/karol-nov/">LinkedIn</a></span>
     </p>
   </section>
 
@@ -180,6 +181,11 @@ const roles = [
     font-size: 0.8rem;
     color: var(--muted);
   }
+
+  /* The button and the links wrap as two whole pieces, each on its own line on narrow screens,
+     rather than leaving a stray link under the button. */
+  .elsewhere { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+  .elsewhere > span { white-space: nowrap; }
 
   /* An outlined pill; the ball fills it in when it arrives (.lit). */
   .touch {
