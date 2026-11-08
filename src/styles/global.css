@@ -18,6 +18,9 @@
   --max: 42rem;
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Motion: strong ease-out for things entering/leaving, ease-in-out for things moving on screen. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 :root[data-theme='light'] { color-scheme: light; }
@@ -74,16 +77,36 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 
 ::selection { background: var(--selection); }
 
-/* View transitions — cross-document, no client router. The header stays put while the
-   page content fades and lifts; post titles (named per post) morph between list and page. */
+/* Page entrance: content rises in, staggered 40ms per item. `main` staggers its direct
+   children; pages that want finer steps opt out and mark items with .rise and --i. */
+.rise, .stagger > * { animation: rise 280ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.stagger > :nth-child(2) { --i: 1; }
+.stagger > :nth-child(3) { --i: 2; }
+.stagger > :nth-child(4) { --i: 3; }
+.stagger > :nth-child(n + 5) { --i: 4; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* View transitions — cross-document, no client router. The header stays put, the old page
+   fades out, and the new one is revealed by the stagger above. Post titles morph between
+   the list and the post page. */
 @view-transition { navigation: auto; }
 
-::view-transition-group(*) { animation-duration: 320ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
-::view-transition-old(page) { animation: 160ms ease-in both page-out; }
-::view-transition-new(page) { animation: 320ms cubic-bezier(0.2, 0, 0, 1) 60ms both page-in; }
+::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(page) { animation: 150ms var(--ease-out) both page-out; }
+::view-transition-new(page) { animation: none; }
 
 @keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
-@keyframes page-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* Both ends are sized to their text, so the morph scales without stretching; the blur hides
+   the cross-fade between the two text sizes. */
+.post-title { width: fit-content; view-transition-class: post-title; }
+::view-transition-group(.post-title) { animation-duration: 300ms; animation-timing-function: var(--ease-in-out); }
+::view-transition-old(.post-title) { animation: 300ms var(--ease-in-out) both title-out; }
+::view-transition-new(.post-title) { animation: 300ms var(--ease-in-out) both title-in; }
+
+@keyframes title-out { to { opacity: 0; filter: blur(2px); } }
+@keyframes title-in { from { opacity: 0; filter: blur(2px); } }
 
 /* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
 .theme-transition * { view-transition-name: none !important; }
@@ -93,4 +116,5 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }
+  .rise, .stagger > * { animation: none; }
 }

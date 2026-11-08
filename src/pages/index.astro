@@ -7,22 +7,22 @@ import { getPosts } from '../lib/posts';
 const recent = (await getPosts()).slice(0, 3);
 ---
 
-<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} stagger={false}>
   <section class="hero">
-    <h1>Hi, I'm Karol.</h1>
-    <p class="lede">
+    <h1 class="rise">Hi, I'm Karol.</h1>
+    <p class="lede rise" style="--i: 1">
       I build software and write about what I learn along the way. This is my corner of the web —
       notes, projects and the occasional long read.
     </p>
-    <div class="cta">
+    <div class="cta rise" style="--i: 2">
       <a class="button" href="/blog/">Read the blog</a>
       <a class="button secondary" href="/contact/">Get in touch</a>
     </div>
   </section>
 
   <section>
-    <h2>Recent writing</h2>
-    <PostList posts={recent} />
+    <h2 class="rise" style="--i: 3">Recent writing</h2>
+    <PostList posts={recent} stagger={4} />
   </section>
 </BaseLayout>
 
