@@ -126,7 +126,7 @@ const roles = [
 
 <style>
   .lede { font-size: 1.2rem; color: var(--muted); }
-  section { margin-top: 3rem; }
+  section { margin-top: 4.5rem; }
   h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
   /* A red ball rides along as you scroll (see the script below). It starts as the underline
      under the page title, drops into the left margin, and at each role and section lands on the
@@ -163,9 +163,9 @@ const roles = [
      the rest of the page and the ball never crosses it. Wider screens have room for more. */
   .timeline { --gutter: 1.25rem; margin-left: calc(-1 * var(--gutter)); padding-left: var(--gutter); }
   @media (min-width: 48rem) { .timeline { --gutter: 1.75rem; } }
-  .roles { list-style: none; padding: 0; margin: 0; display: grid; gap: 2rem; }
+  .roles { list-style: none; padding: 0; margin: 0; display: grid; gap: 3.5rem; }
   .roles > li { transition: opacity 320ms var(--ease-out); }
-  .roles.dim > li:not(.active) { opacity: 0.55; }
+  .roles.dim > li:not(.active) { opacity: 0.75; }
   .role-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 1rem; }
   h3 { font-size: 1.05rem; margin: 0; }
   h3 .muted { font-weight: 400; }
@@ -188,10 +188,19 @@ const roles = [
     border-radius: 999px;
     font-weight: 600;
     text-decoration: none;
-    transition: color 200ms var(--ease-out), border-color 200ms var(--ease-out);
+    transition:
+      color 200ms var(--ease-out),
+      border-color 200ms var(--ease-out),
+      background-color 200ms var(--ease-out),
+      transform 160ms var(--ease-out);
   }
-  .touch.lit, .touch:hover { color: var(--accent-fg); border-color: var(--accent-bg); }
-  .touch:hover:not(.lit) { background: var(--accent-bg); }
+  .touch.lit { color: var(--accent-fg); border-color: var(--accent-bg); }
+  .touch:active { transform: scale(0.97); }
+  /* Hover only where there's a real pointer; on touch it would stick after a tap. */
+  @media (hover: hover) and (pointer: fine) {
+    .touch:hover { color: var(--accent-fg); border-color: var(--accent-bg); }
+    .touch:hover:not(.lit) { background: var(--accent-bg); }
+  }
 
   /* Gentle snapping to each role, only where a role fits on screen. */
   @media (min-width: 48rem) and (prefers-reduced-motion: no-preference) {
@@ -199,8 +208,10 @@ const roles = [
     .roles > li { scroll-snap-align: start; scroll-margin-top: 2rem; }
   }
 
+  /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
+    .ball { transition: opacity 150ms var(--ease-out); }
   }
 </style>
 
@@ -234,11 +245,17 @@ const roles = [
     const KEYS = ['x', 'y', 'w', 'h'] as const;
     const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
-    // Boxes in main's coordinates, which the ball is positioned in.
+    // Layout boxes in main's coordinates, which the ball is positioned in. Built from offsets, not
+    // getBoundingClientRect, so the page's entrance animation (which shifts content while it
+    // runs) doesn't throw the measurements off.
     function box(el: HTMLElement) {
-      const r = el.getBoundingClientRect();
-      const m = main!.getBoundingClientRect();
-      return { top: r.top - m.top, left: r.left - m.left, width: r.width, height: r.height };
+      let top = 0;
+      let left = 0;
+      for (let node: HTMLElement | null = el; node && node !== main; node = node.offsetParent as HTMLElement | null) {
+        top += node.offsetTop;
+        left += node.offsetLeft;
+      }
+      return { top, left, width: el.offsetWidth, height: el.offsetHeight };
     }
 
     // The ball follows a reading line, in main's coordinates, normally 40% down the viewport.
@@ -247,9 +264,11 @@ const roles = [
     // keep the ball moving continuously instead of jumping.
     function readingLine() {
       const middle = innerHeight * 0.4;
-      const top = title!.getBoundingClientRect().bottom + scrollY + 4;
+      // Page positions (where they'd be in the viewport at scroll 0).
+      const mainTop = main!.getBoundingClientRect().top + scrollY;
+      const top = mainTop + box(title!).top + box(title!).height + 4;
       const maxScroll = document.documentElement.scrollHeight - innerHeight;
-      const bottom = touch!.getBoundingClientRect().bottom + scrollY - maxScroll;
+      const bottom = mainTop + box(touch!).top + box(touch!).height - maxScroll;
       let line = middle;
       if (middle > top) line = top + (middle - top) * clamp(scrollY / (middle - top), 0, 1);
       if (bottom > middle) line += (bottom - line) * clamp(1 - (maxScroll - scrollY) / (bottom - middle), 0, 1);
@@ -278,12 +297,15 @@ const roles = [
       if (scrollY < 16) return shape(title!);
 
       const y = readingLine();
-      const index = stops.findLastIndex((stop) => box(stop.zone).top <= y);
-      // Hold on a stop for the first part of its zone (and for good on the last one).
+      // A stop starts a little before its zone reaches the reading line, and holds for the first
+      // part of the zone — at least 140px of scrolling even for short sections — so a quick scroll
+      // still gives the ball time to get there. The last stop holds for good.
+      const land = (i: number) => box(stops[i].zone).top - 48;
       const hold = (i: number) => {
         const zone = box(stops[i].zone);
-        return i === stops.length - 1 ? Infinity : zone.top + Math.min(zone.height * 0.45, 220);
+        return i === stops.length - 1 ? Infinity : zone.top + clamp(zone.height * 0.45, 140, 220);
       };
+      const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
 
       // Otherwise ride down the track to the next stop. The ride is paced so the ball reaches the
@@ -294,20 +316,21 @@ const roles = [
         ? { y: centre(title!), at: head.top + head.height + 4 }
         : { y: centre(stops[index].el), at: hold(index) };
       const next = stops[index + 1];
-      const t = clamp((y - from.at) / (box(next.zone).top - from.at), 0, 1);
+      const t = clamp((y - from.at) / (land(index + 1) - from.at), 0, 1);
       const at = from.y + (centre(next.el) - from.y) * t;
       return { box: { x: trackX(), y: at - dot / 2, w: dot, h: dot }, line: null };
     }
 
     // A spring per property. Position is critically damped — a smooth ease-out with no overshoot,
-    // so the ball and its trail don't sway. Size keeps a little bounce for the stretch into and
-    // out of an underline.
+    // so the ball and its trail don't sway. Size keeps a little bounce when stretching into an
+    // underline, but retracts crisply with none, so the ball never dips to nothing on the way back.
     const SPRING = {
       x: { stiffness: 200, damping: 28 },
       y: { stiffness: 200, damping: 28 },
       w: { stiffness: 220, damping: 20 },
       h: { stiffness: 220, damping: 20 },
     };
+    const RETRACT = { stiffness: 300, damping: 35 };
     let { box: goal, line: goalLine } = target();
     const pos: Box = { ...goal };
     const vel: Box = { x: 0, y: 0, w: 0, h: 0 };
@@ -322,7 +345,7 @@ const roles = [
     function render() {
       // Squash and stretch along the direction of travel while it's a ball.
       const speed = Math.hypot(vel.x, vel.y);
-      const stretch = pos.w < dot * 2 ? clamp(speed / 2400, 0, 0.35) : 0;
+      const stretch = pos.w < dot * 2 ? clamp(speed / 6000, 0, 0.12) : 0;
       const angle = Math.atan2(vel.y, vel.x);
       touch!.classList.toggle('lit', line === touch && pos.w > dot * 2);
       ball!.style.width = `${pos.w}px`;
@@ -358,19 +381,41 @@ const roles = [
     // Shape changes happen before travelling, never during: an underline first shrinks sideways
     // into a ball on the track, then the ball moves; a ball first gets level with its heading on
     // the track, then stretches out under it. So the ball only ever travels along the track.
-    function stage(): Box {
-      if (line) return line === goalLine ? goal : ballAt(lineBox);
-      return goalLine ? ballAt(goal) : goal;
+    // The ball lands on a stop when you settle on it, not while you fly past. A stop reached while
+    // scrolling slowly — or where scrolling comes to rest — is committed: the ball gets there and
+    // stretches out even if you then drift past, and the underline lingers a moment before moving
+    // on. A fast scroll cancels any landing still on its way, so the ball rides along with you
+    // and never lags behind replaying stops you've already left.
+    const LINGER_MS = 200;
+    const FAST_PX_PER_S = 1500;
+    let landedAt = 0;
+    let pending: { el: HTMLElement; box: Box } | null = null;
+    let speed = 0;
+    let lastScroll = { y: scrollY, t: performance.now() };
+    let restTimer = 0;
+
+    const next = () => pending;
+
+    function stage(now: number): Box {
+      if (line) {
+        if (line === goalLine) return goal;
+        return now - landedAt < LINGER_MS ? lineBox : ballAt(lineBox);
+      }
+      const stop = next();
+      return stop ? ballAt(stop.box) : goal;
     }
 
     function step(now: number) {
       frame = 0;
       const dt = Math.min((now - (last || now)) / 1000, 1 / 30);
       last = now;
-      const aim = stage();
+      // Settled on a stop the ball isn't on yet (e.g. it was busy with the previous one): head there.
+      if (!pending && goalLine && goalLine !== line && speed <= FAST_PX_PER_S) pending = { el: goalLine, box: goal };
+      const aim = stage(now);
       let moving = false;
       for (const k of KEYS) {
-        const force = SPRING[k].stiffness * (aim[k] - pos[k]) - SPRING[k].damping * vel[k];
+        const spring = (k === 'w' || k === 'h') && aim[k] < pos[k] ? RETRACT : SPRING[k];
+        const force = spring.stiffness * (aim[k] - pos[k]) - spring.damping * vel[k];
         vel[k] += force * dt;
         pos[k] += vel[k] * dt;
         if (Math.abs(aim[k] - pos[k]) > 0.1 || Math.abs(vel[k]) > 0.1) moving = true;
@@ -378,12 +423,19 @@ const roles = [
       }
 
       // Move on to the next stage once this one is (nearly) done.
-      if (line && line !== goalLine && Math.abs(pos.w - dot) < 1 && Math.abs(pos.h - dot) < 1) {
-        line = null;
-        moving = true;
-      } else if (!line && goalLine && Math.hypot(pos.x - aim.x, pos.y - aim.y) < 1.5 && Math.hypot(vel.x, vel.y) < 120) {
-        line = goalLine;
-        lineBox = goal;
+      if (line && line !== goalLine) {
+        if (now - landedAt < LINGER_MS) moving = true;
+        else if (Math.abs(pos.w - dot) < 1 && Math.abs(pos.h - dot) < 1) {
+          line = null;
+          moving = true;
+        }
+      } else if (!line && next() && Math.hypot(pos.x - aim.x, pos.y - aim.y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
+        // Close enough, and not still flying past: start stretching.
+        const stop = next()!;
+        line = stop.el;
+        lineBox = stop.el === goalLine ? goal : stop.box;
+        landedAt = now;
+        pending = null;
         moving = true;
       }
       render();
@@ -401,16 +453,16 @@ const roles = [
     function update() {
       ({ box: goal, line: goalLine } = target());
       if (line && line === goalLine) lineBox = goal;
+      if (goalLine && goalLine === line) pending = null;
+      else if (speed > FAST_PX_PER_S) {
+        if (!line) pending = null;
+      } else if (goalLine && !pending) pending = { el: goalLine, box: goal };
       const y = readingLine();
       const active = roles.findLastIndex((role) => box(role).top <= y);
       roles.forEach((role, i) => role.classList.toggle('active', i === active));
       list!.classList.toggle('dim', scrollY >= 16 && active >= 0 && y <= box(timeline!).top + box(timeline!).height);
       if (reduceMotion.matches) {
-        Object.assign(pos, goal);
-        Object.assign(vel, { x: 0, y: 0, w: 0, h: 0 });
-        line = goalLine;
-        lineBox = goal;
-        render();
+        showStill();
       } else if (!frame) {
         frame = requestAnimationFrame(step);
       }
@@ -423,9 +475,49 @@ const roles = [
       update();
     }
 
+    // Place the ball without animating, e.g. once the web font has loaded and moved things.
+    function place() {
+      ({ box: goal, line: goalLine } = target());
+      if (reduceMotion.matches) return showStill();
+      Object.assign(pos, goal);
+      Object.assign(vel, { x: 0, y: 0, w: 0, h: 0 });
+      line = goalLine;
+      lineBox = goal;
+      pending = null;
+      render();
+    }
+
+    // Reduced motion: only show underlines, fading each in where it is; hide the ball in between.
+    function showStill() {
+      const changed = goalLine !== line;
+      Object.assign(pos, goal);
+      Object.assign(vel, { x: 0, y: 0, w: 0, h: 0 });
+      line = goalLine;
+      lineBox = goal;
+      pending = null;
+      render();
+      ball!.style.opacity = line ? '1' : '0';
+      if (line && changed) ball!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+    }
+
     render();
     ball.style.visibility = 'visible';
-    addEventListener('scroll', update, { passive: true });
+    document.fonts.ready.then(place);
+    // Track scroll speed, and treat a short pause as coming to rest.
+    function onScroll() {
+      const now = performance.now();
+      const instant = (Math.abs(scrollY - lastScroll.y) / Math.max(now - lastScroll.t, 1)) * 1000;
+      speed = speed * 0.6 + instant * 0.4;
+      lastScroll = { y: scrollY, t: now };
+      clearTimeout(restTimer);
+      restTimer = window.setTimeout(() => {
+        speed = 0;
+        update();
+      }, 120);
+      update();
+    }
+
+    addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(update).observe(main);
     resize();
