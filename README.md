@@ -41,9 +41,7 @@ Locally, the email binding is simulated — sent messages are logged to the cons
 
 ## Before the first deploy
 
-The site is served at **https://beta.karolnov.dev** for now (custom domain route in `wrangler.jsonc`).
-To move to the apex `karolnov.dev`, update the `routes` pattern and `TURNSTILE_HOSTNAMES` in `wrangler.jsonc`,
-`site` in `astro.config.mjs`, and the sitemap URL in `public/robots.txt`.
+The site is served at **https://karolnov.dev** (custom domain route in `wrangler.jsonc`).
 
 1. Make sure the `karolnov.dev` zone is on your Cloudflare account, then `npx wrangler login`.
 2. Enable Email Routing and verify where contact messages should land:
@@ -53,4 +51,4 @@ To move to the apex `karolnov.dev`, update the `routes` pattern and `TURNSTILE_H
    Messages are sent from `blog@karolnov.dev` (`CONTACT_FROM` in `wrangler.jsonc`).
 3. Create a Turnstile widget (Dashboard → Turnstile → Add widget, managed mode) for `karolnov.dev`, put its
    sitekey in `TURNSTILE_SITEKEY` in `wrangler.jsonc`, and store the secret: `npx wrangler secret put TURNSTILE_SECRET`
-4. `npm run deploy` — Wrangler attaches `beta.karolnov.dev` to the Worker and provisions the certificate.
+4. `npm run deploy` — Wrangler attaches `karolnov.dev` to the Worker and provisions the certificate.

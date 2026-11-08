@@ -5,7 +5,7 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://beta.karolnov.dev',
+  site: 'https://karolnov.dev',
   // Pages are prerendered by default; opt individual routes into SSR with `export const prerender = false`.
   output: 'static',
   adapter: cloudflare({
