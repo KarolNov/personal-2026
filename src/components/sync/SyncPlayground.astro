@@ -34,6 +34,12 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
   <div class="stage">
     <svg class="wires" aria-hidden="true">
       {PEERS.map((p) => <path data-wire={p.id} />)}
+      {PEERS.map((p) => (
+        <g class="break" data-break={p.id}>
+          <circle r="9" />
+          <path d="M -3.5 -3.5 L 3.5 3.5 M 3.5 -3.5 L -3.5 3.5" />
+        </g>
+      ))}
     </svg>
     {PEERS.map((p) => (
       <div class="peer" data-peer={p.id}>
@@ -56,6 +62,7 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
       </div>
       <output class="server-text" data-server-text>{initial}</output>
       <ol class="log" data-log aria-live="polite" />
+      {PEERS.map((p) => <span class="queued down" data-down={p.id} hidden />)}
     </div>
   </div>
 
@@ -128,8 +135,14 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     padding: 1.25rem 1rem 1.25rem;
   }
   .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-  .wires path { fill: none; stroke: var(--line); stroke-width: 1.5; transition: stroke-dasharray 200ms; }
-  .wires path.offline { stroke-dasharray: 4 6; }
+  .wires path { fill: none; stroke: var(--line); stroke-width: 1.5; transition: opacity 250ms; }
+  .wires path.offline { opacity: 0.6; }
+  /* Where an offline wire is cut. Packets sent while offline run into it and bounce back. */
+  .break { opacity: 0; transition: opacity 250ms; }
+  .break.on { opacity: 1; }
+  .break circle { fill: var(--bg); stroke: var(--danger); stroke-width: 1.5; transition: fill 200ms; }
+  .break path { fill: none; stroke: var(--danger); stroke-width: 1.8; stroke-linecap: round; }
+  .break.hit circle { fill: color-mix(in srgb, var(--danger) 18%, var(--bg)); }
 
   .peer, .server {
     position: relative;
@@ -139,13 +152,13 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg);
-    transition: border-color 200ms, box-shadow 400ms var(--ease-out);
+    transition: border-color 300ms, box-shadow 300ms;
   }
   .peer[data-peer='alice'] { grid-area: alice; --who: var(--alice); }
   .peer[data-peer='bob'] { grid-area: bob; --who: var(--bob); }
   .server { grid-area: server; justify-self: center; width: min(100%, 26rem); }
   .peer.offline { opacity: 0.85; border-style: dashed; }
-  .flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--flash) 35%, transparent); border-color: var(--flash); }
+  .flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--flash) 18%, transparent); border-color: color-mix(in srgb, var(--flash) 60%, var(--border)); }
 
   .peer-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
   .name { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; }
@@ -184,6 +197,10 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     font: 600 0.72rem/1.5 var(--font-mono);
     white-space: nowrap;
   }
+  .queued.down { bottom: auto; top: 0; translate: -50% -55%; }
+  .queued.down[data-down='alice'] { left: 30%; --who: var(--alice); }
+  .queued.down[data-down='bob'] { left: 70%; --who: var(--bob); }
+  .queued[hidden] { display: none; }
 
   .items { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 0.5rem; }
   .items[hidden] { display: none; }
@@ -207,7 +224,9 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
   .items :global(.cell.new) { animation: pop 320ms var(--ease-out); }
 
   .log { list-style: none; margin: 0.5rem 0 0; padding: 0; font: 0.75rem/1.5 var(--font-mono); color: var(--muted); min-height: 4.5em; }
-  .log :global(li) { display: flex; gap: 0.4rem; align-items: baseline; animation: rise 240ms var(--ease-out); }
+  .log :global(li) { display: flex; gap: 0.4rem; align-items: baseline; white-space: nowrap; animation: fade-in 200ms var(--ease-out); }
+  .log :global(li span) { overflow: hidden; text-overflow: ellipsis; }
+  .log :global(li b) { font-weight: 400; opacity: 0.7; }
   .log :global(li::before) { content: ''; flex: none; width: 0.45rem; height: 0.45rem; border-radius: 99px; background: var(--who); translate: 0 -0.05rem; }
   .log :global(li.alice) { --who: var(--alice); }
   .log :global(li.bob) { --who: var(--bob); }
@@ -243,8 +262,10 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
   .stage :global(.pill.alice) { --who: var(--alice); }
   .stage :global(.pill.bob) { --who: var(--bob); }
   .stage :global(.pill.ack) { --who: var(--muted); font-weight: 400; }
+  .stage :global(.pill small) { font-size: inherit; font-weight: 400; opacity: 0.8; }
 
   @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
+  @keyframes fade-in { from { opacity: 0; } }
 
   @media (max-width: 30rem) {
     .stage { gap: 4rem 0.6rem; padding-inline: 0.6rem; }
@@ -257,7 +278,10 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
   import { STRATEGIES, CLIENTS, chars, fmtId, show, type ClientId, type Effect, type Message, type Mode, type Strategy } from './engine';
 
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const TYPE_MS = 150;
+  const TYPE_MS = 170;
+  // Minimum gap between two messages on the same wire, so pills follow each other instead of piling up.
+  const GAP = 360;
+  const BOUNCE_MS = 1100;
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   // Cloudflare's Worker types redeclare Element.append for HTMLRewriter, so this script sticks to
@@ -290,13 +314,16 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
           queued: el.querySelector<HTMLElement>('[data-queued]')!,
           items: el.querySelector<HTMLElement>('[data-items]'),
           wire: root.querySelector<SVGPathElement>(`[data-wire="${id}"]`)!,
+          cut: root.querySelector<SVGGElement>(`[data-break="${id}"]`)!,
+          downBox: root.querySelector<HTMLElement>(`[data-down="${id}"]`)!,
           value: initial,
           seen: new Set<string>(),
         }];
       }),
     ) as Record<ClientId, {
       el: HTMLElement; input: HTMLTextAreaElement; online: HTMLInputElement; queued: HTMLElement;
-      items: HTMLElement | null; wire: SVGPathElement; value: string; seen: Set<string>;
+      items: HTMLElement | null; wire: SVGPathElement; cut: SVGGElement; downBox: HTMLElement;
+      value: string; seen: Set<string>;
     }>;
 
     let strategy: Strategy;
@@ -306,66 +333,155 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     let latency = Number(latencyInput.value);
 
     // ---- The network: one FIFO queue per client and direction, paused while offline. ----
+    // Messages leave one at a time, at least GAP apart. While the wire is cut they wait in the queue
+    // (the sender's outbox, or the server's for a client that's offline).
     type Dir = 'up' | 'down';
     const queues: Record<ClientId, Record<Dir, Message[]>> = { alice: { up: [], down: [] }, bob: { up: [], down: [] } };
-    const lastArrival: Record<string, number> = {};
+    let lastDepart: Record<string, number> = {};
+    let lastArrival: Record<string, number> = {};
+    let busy: Record<string, boolean> = {};
+    // Messages riding a packet that's bouncing back from the break: counted in the outbox only
+    // once they're home. One bounce at a time per wire; later messages join it.
+    let bouncing: Record<string, number> = {};
 
     function send(client: ClientId, dir: Dir, msg: Message) {
       queues[client][dir].push(msg);
+      if (!peers[client].online.checked) {
+        const key = client + dir;
+        if (bouncing[key]) bouncing[key]++;
+        else bounce(client, dir, msg);
+      }
       pump(client, dir);
     }
 
     function pump(client: ClientId, dir: Dir) {
+      const key = client + dir;
       const queue = queues[client][dir];
-      while (peers[client].online.checked && queue.length) {
-        const msg = queue.shift()!;
-        const now = performance.now();
+      if (busy[key] || !peers[client].online.checked || !queue.length) return refresh();
+      busy[key] = true;
+      const gen = generation;
+      const now = performance.now();
+      setTimeout(() => {
+        if (gen !== generation) return;
+        busy[key] = false;
+        if (!peers[client].online.checked || !queue.length) return refresh();
+        // Everything waiting goes in one packet, the way a real client batches what piled up.
+        const batch = queue.splice(0);
+        const msg = batch[batch.length - 1];
+        const t = performance.now();
+        lastDepart[key] = t;
         // Keep messages in order even if the latency slider moves while they're in the air.
-        const key = client + dir;
-        const arrive = Math.max(now + latency, (lastArrival[key] ?? 0) + 140);
+        const arrive = Math.max(t + latency, (lastArrival[key] ?? 0) + GAP);
         lastArrival[key] = arrive;
         const sender = dir === 'up' ? client : msg.from ?? otherOf(client);
-        fly(client, dir, msg, sender, arrive - now);
+        fly(client, dir, msg, sender, arrive - t, batch.length, batch.every((m) => m.ack));
         inFlight++;
-        const gen = generation;
         setTimeout(() => {
           if (gen !== generation) return;
           inFlight--;
-          if (dir === 'up') onServer(client, msg);
-          else onClient(client, msg);
+          for (const m of batch) {
+            if (dir === 'up') onServer(client, m);
+            else onClient(client, m);
+          }
           refresh();
-        }, arrive - now);
-      }
+        }, arrive - t);
+        pump(client, dir);
+      }, Math.max(0, (lastDepart[key] ?? -Infinity) + GAP - now));
       refresh();
     }
 
     const otherOf = (c: ClientId): ClientId => (c === 'alice' ? 'bob' : 'alice');
 
-    function fly(client: ClientId, dir: Dir, msg: Message, sender: ClientId, ms: number) {
-      const pill = document.createElement('span');
-      pill.className = `pill ${msg.ack ? 'ack' : sender}`;
-      pill.textContent = msg.label;
-      pill.style.offsetPath = `path("${peers[client].wire.getAttribute('d')}")`;
-      stage.appendChild(pill);
-      const [from, to] = dir === 'up' ? ['0%', '100%'] : ['100%', '0%'];
+    function pill(client: ClientId, msg: Message, sender: ClientId, count = 1, ack = !!msg.ack) {
+      const el = document.createElement('span');
+      el.className = `pill ${ack ? 'ack' : sender}`;
+      el.textContent = msg.label;
+      if (count > 1) {
+        const n = document.createElement('small');
+        n.textContent = ` +${count - 1}`;
+        el.appendChild(n);
+      }
+      el.style.offsetPath = `path("${peers[client].wire.getAttribute('d')}")`;
+      stage.appendChild(el);
+      return el;
+    }
+
+    // Positions along a wire, as seen from one end: 0 is the sender, 100 the receiver.
+    const along = (dir: Dir, pct: number) => `${dir === 'up' ? pct : 100 - pct}%`;
+
+    function fly(client: ClientId, dir: Dir, msg: Message, sender: ClientId, ms: number, count: number, ack: boolean) {
+      const el = pill(client, msg, sender, count, ack);
       const animation = reduceMotion.matches
-        ? pill.animate({ offsetDistance: ['50%', '50%'], opacity: [0, 1, 1, 0] }, { duration: ms })
-        : pill.animate(
-            { offsetDistance: [from, to], opacity: [0, 1, 1, 1, 0], scale: [0.6, 1, 1, 1, 0.8] },
+        ? el.animate({ offsetDistance: ['50%', '50%'], opacity: [0, 1, 1, 0] }, { duration: ms })
+        : el.animate(
+            [
+              { offsetDistance: along(dir, 0), opacity: 0, scale: 0.8 },
+              { opacity: 1, scale: 1, offset: 0.08 },
+              { opacity: 1, scale: 1, offset: 0.92 },
+              { offsetDistance: along(dir, 100), opacity: 0, scale: 0.9 },
+            ],
             { duration: ms, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
           );
-      animation.onfinish = animation.oncancel = () => pill.remove();
+      animation.onfinish = animation.oncancel = () => el.remove();
+    }
+
+    // Sent while offline: the packet runs out to the cut in the wire, knocks against it, and
+    // drops back into the queue it came from.
+    function bounce(client: ClientId, dir: Dir, msg: Message) {
+      const key = client + dir;
+      const gen = generation;
+      bouncing[key] = (bouncing[key] ?? 0) + 1;
+      const el = pill(client, msg, dir === 'up' ? client : msg.from ?? otherOf(client));
+      const animation = reduceMotion.matches
+        ? el.animate({ offsetDistance: [along(dir, 30), along(dir, 30)], opacity: [0, 1, 1, 0] }, { duration: BOUNCE_MS })
+        : el.animate(
+            [
+              { offsetDistance: along(dir, 2), opacity: 0, scale: 0.7, easing: 'cubic-bezier(0.4, 0, 1, 1)' },
+              { offsetDistance: along(dir, 41), opacity: 1, scale: 1, offset: 0.42, easing: 'ease-out' },
+              { offsetDistance: along(dir, 34), opacity: 1, scale: 0.95, offset: 0.56, easing: 'ease-in' },
+              { offsetDistance: along(dir, 38), opacity: 0.85, scale: 0.95, offset: 0.64, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
+              { offsetDistance: along(dir, 2), opacity: 0, scale: 0.6 },
+            ],
+            { duration: BOUNCE_MS },
+          );
+      setTimeout(() => {
+        const cut = peers[client].cut;
+        cut.classList.add('hit');
+        setTimeout(() => cut.classList.remove('hit'), 250);
+      }, BOUNCE_MS * 0.42);
+      animation.onfinish = animation.oncancel = () => {
+        el.remove();
+        if (gen !== generation) return;
+        bouncing[key] = 0;
+        refresh();
+        const box = dir === 'up' ? peers[client].queued : peers[client].downBox;
+        if (!reduceMotion.matches && !box.hidden) box.animate({ scale: [1, 1.18, 1] }, { duration: 220, easing: 'ease-out' });
+      };
     }
 
     // ---- What happens when a message lands. ----
     function onServer(from: ClientId, msg: Message) {
       const { log: entry, out } = strategy.serverReceive(from, msg);
       if (entry) {
-        const li = document.createElement('li');
-        li.className = from + (entry.changed ? ' changed' : '');
-        li.textContent = entry.text;
-        log.insertBefore(li, log.firstChild);
-        while (log.children.length > 3) log.lastElementChild!.remove();
+        const cls = from + (entry.changed ? ' changed' : '');
+        const top = log.firstElementChild as HTMLLIElement | null;
+        // The same line again just bumps a counter, so the log doesn't scroll on every keystroke.
+        if (top && top.className === cls && top.dataset.text === entry.text) {
+          const n = Number(top.dataset.n) + 1;
+          top.dataset.n = String(n);
+          top.querySelector('b')!.textContent = `×${n}`;
+        } else {
+          const li = document.createElement('li');
+          li.className = cls;
+          li.dataset.text = entry.text;
+          li.dataset.n = '1';
+          const text = document.createElement('span');
+          text.textContent = entry.text;
+          li.appendChild(text);
+          li.appendChild(document.createElement('b'));
+          log.insertBefore(li, log.firstChild);
+          while (log.children.length > 3) log.lastElementChild!.remove();
+        }
       }
       serverText.value = strategy.text('server');
       flash(server, from);
@@ -400,10 +516,13 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
       renderItems(who);
     }
 
+    // A burst of arrivals keeps the highlight on rather than blinking it once per message.
+    const flashTimers = new Map<HTMLElement, number>();
     function flash(el: HTMLElement, by: ClientId) {
       el.style.setProperty('--flash', `var(--${by})`);
       el.classList.add('flash');
-      setTimeout(() => el.classList.remove('flash'), 450);
+      clearTimeout(flashTimers.get(el));
+      flashTimers.set(el, window.setTimeout(() => el.classList.remove('flash'), 700));
     }
 
     // ---- Local edits. ----
@@ -442,11 +561,18 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
     function refresh() {
       for (const id of CLIENTS) {
         const peer = peers[id];
-        const waiting = queues[id].up.length + queues[id].down.length;
-        peer.queued.hidden = waiting === 0;
-        peer.queued.textContent = `${waiting} queued`;
-        peer.el.classList.toggle('offline', !peer.online.checked);
-        peer.wire.classList.toggle('offline', !peer.online.checked);
+        const offline = !peer.online.checked;
+        // Only shown while the wire is cut: a short backlog while online is just the GAP at work.
+        const up = queues[id].up.length - (bouncing[id + 'up'] ?? 0);
+        const down = queues[id].down.length - (bouncing[id + 'down'] ?? 0);
+        peer.queued.hidden = !offline || up <= 0;
+        peer.queued.textContent = `${up} unsent`;
+        peer.downBox.hidden = !offline || down <= 0;
+        peer.downBox.textContent = `${down} waiting`;
+        peer.el.classList.toggle('offline', offline);
+        peer.wire.classList.toggle('offline', offline);
+        peer.cut.classList.toggle('on', offline);
+        cutWire(id);
       }
       const pending = inFlight + CLIENTS.reduce((n, c) => n + queues[c].up.length + queues[c].down.length, 0);
       const texts = new Set([strategy.text('alice'), strategy.text('bob'), strategy.text('server')]);
@@ -473,7 +599,20 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
         const y2 = s.top - box.top;
         const my = (y1 + y2) / 2;
         peers[id].wire.setAttribute('d', `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`);
+        const wire = peers[id].wire;
+        const mid = wire.getPointAtLength(wire.getTotalLength() / 2);
+        peers[id].cut.setAttribute('transform', `translate(${mid.x} ${mid.y})`);
+        cutWire(id);
       }
+    }
+
+    // An offline wire gets a gap in the middle, where the break marker sits.
+    function cutWire(id: ClientId) {
+      const wire = peers[id].wire;
+      if (!peers[id].online.checked && wire.getAttribute('d')) {
+        const half = wire.getTotalLength() / 2;
+        wire.style.strokeDasharray = `${Math.max(0, half - 14)} 28 ${half}`;
+      } else wire.style.strokeDasharray = '';
     }
     new ResizeObserver(layout).observe(stage);
 
@@ -484,6 +623,10 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
       stage.querySelectorAll('.pill').forEach((p) => p.remove());
       log.replaceChildren();
       serverText.value = initial;
+      lastDepart = {};
+      lastArrival = {};
+      busy = {};
+      bouncing = {};
       for (const id of CLIENTS) {
         queues[id].up = [];
         queues[id].down = [];
