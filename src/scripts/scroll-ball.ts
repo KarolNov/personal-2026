@@ -26,7 +26,7 @@ export function initScrollBall() {
     ];
     const dot = ball.offsetWidth;
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-    const TRAIL_MS = 550;
+    const TRAIL_MS = 320;
 
     type Box = { x: number; y: number; w: number; h: number };
     const KEYS = ['x', 'y', 'w', 'h'] as const;
@@ -186,33 +186,87 @@ export function initScrollBall() {
         `translate(${pos.x}px, ${pos.y}px) rotate(${angle}rad) scale(${1 + stretch}, ${1 - stretch}) rotate(${-angle}rad)`;
     }
 
-    function drawTrail(now: number) {
-      trail = trail.filter((p) => now - p.t < TRAIL_MS);
-      const dpr = devicePixelRatio || 1;
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx!.clearRect(0, 0, innerWidth, innerHeight);
-      if (trail.length < 2) return;
-      // Trail points live in main's coordinates so they stay put on the page as it scrolls.
-      const m = main!.getBoundingClientRect();
-      ctx!.strokeStyle = getComputedStyle(ball!).backgroundColor;
-      ctx!.lineCap = 'round';
-      for (let i = 1; i < trail.length; i++) {
-        const life = 1 - (now - trail[i].t) / TRAIL_MS;
-        ctx!.globalAlpha = life * life * 0.6;
-        ctx!.lineWidth = dot * (0.25 + 0.6 * life);
-        ctx!.beginPath();
-        ctx!.moveTo(trail[i - 1].x + m.left, trail[i - 1].y + m.top);
-        ctx!.lineTo(trail[i].x + m.left, trail[i].y + m.top);
-        ctx!.stroke();
-      }
+    // The trail is drawn on a canvas that sits on the page (in main's coordinates), not on the
+    // screen, so it scrolls together with the ball; iOS scrolls the page on its own thread, and a
+    // screen-fixed canvas redrawn from script falls behind it. The canvas is a window a little
+    // taller than the screen that moves to wherever the trail is.
+    const TRAIL_DPR = Math.min(devicePixelRatio || 1, 2);
+    let trailColor = '';
+    let win = { x: 0, y: 0, w: 0, h: 0 };
+    function sizeTrail() {
+      const x = trackX() - dot * 2;
+      const w = Math.ceil(main!.clientWidth - x + dot * 2);
+      // Sized from the screen, not the window, so iOS's toolbar showing and hiding doesn't
+      // reallocate the canvas mid-scroll.
+      const h = Math.ceil(Math.max(innerHeight, screen.height) * 1.5);
+      if (w === win.w && h === win.h && x === win.x) return;
+      win = { x, y: win.y, w, h };
+      canvas!.width = w * TRAIL_DPR;
+      canvas!.height = h * TRAIL_DPR;
+      canvas!.style.width = `${w}px`;
+      canvas!.style.height = `${h}px`;
+      canvas!.style.transform = `translate(${win.x}px, ${win.y}px)`;
     }
 
-    // A ball on the track, level with an underline.
-    const ballAt = (b: Box): Box => ({ x: trackX(), y: b.y + b.h / 2 - dot / 2, w: dot, h: dot });
+    function drawTrail(now: number) {
+      trail = trail.filter((p) => now - p.t < TRAIL_MS);
+      ctx!.setTransform(TRAIL_DPR, 0, 0, TRAIL_DPR, 0, 0);
+      ctx!.clearRect(0, 0, win.w, win.h);
+      if (trail.length < 2) return;
 
-    // Shape changes happen before travelling, never during: an underline first shrinks sideways
-    // into a ball on the track, then the ball moves; a ball first gets level with its heading on
-    // the track, then stretches out under it. So the ball only ever travels along the track.
+      // Keep the window over the trail.
+      const ys = trail.map((p) => p.y);
+      const lo = Math.min(...ys) - dot;
+      const hi = Math.max(...ys) + dot;
+      if (lo < win.y || hi > win.y + win.h) {
+        win.y = Math.round((lo + hi) / 2 - win.h / 2);
+        canvas!.style.transform = `translate(${win.x}px, ${win.y}px)`;
+      }
+
+      // One tapered ribbon filled in a single pass, fading from the ball back to nothing. Drawing
+      // it as separate translucent segments doubles the paint where they overlap, which shows
+      // up as a string of darker beads.
+      const life = (p: { t: number }) => 1 - (now - p.t) / TRAIL_MS;
+      const half = (p: { t: number }) => (dot * (0.15 + 0.35 * life(p))) / 2;
+      const left: [number, number][] = [];
+      const right: [number, number][] = [];
+      for (let i = 0; i < trail.length; i++) {
+        const a = trail[Math.max(i - 1, 0)];
+        const b = trail[Math.min(i + 1, trail.length - 1)];
+        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const nx = -(b.y - a.y) / len;
+        const ny = (b.x - a.x) / len;
+        const p = trail[i];
+        const r = half(p);
+        left.push([p.x - win.x + nx * r, p.y - win.y + ny * r]);
+        right.push([p.x - win.x - nx * r, p.y - win.y - ny * r]);
+      }
+      const tail = trail[0];
+      const head = trail[trail.length - 1];
+      const fade = ctx!.createLinearGradient(tail.x - win.x, tail.y - win.y, head.x - win.x, head.y - win.y);
+      fade.addColorStop(0, 'transparent');
+      fade.addColorStop(1, trailColor);
+      ctx!.globalAlpha = 0.45 * life(head) ** 2;
+      ctx!.fillStyle = fade;
+      ctx!.beginPath();
+      ctx!.moveTo(...left[0]);
+      for (const pt of left.slice(1)) ctx!.lineTo(...pt);
+      for (const pt of right.reverse()) ctx!.lineTo(...pt);
+      ctx!.closePath();
+      ctx!.fill();
+    }
+
+    // A ball at the left end of an underline, and level with it on the track.
+    const ballAt = (b: Box): Box => ({ x: b.x, y: b.y + b.h / 2 - dot / 2, w: dot, h: dot });
+    const trackAt = (y: number): Box => ({ x: trackX(), y, w: dot, h: dot });
+    const onTrack = () => Math.abs(pos.x - trackX()) < 1;
+
+    // Shape changes happen in place, and only a round ball ever moves, so scrolling back and
+    // forth mid-change never drags a half-shrunk line around. Leaving a stop, the underline
+    // shrinks into a ball at its left end, slides straight across to the track, then rides it.
+    // Arriving, the ball rides the track until it's level with the heading, slides straight
+    // across to the underline's left end, then stretches out. Up and down travel only ever
+    // happens on the track, clear of the text.
     // The ball lands on a stop when you settle on it, not while you fly past: it heads for a stop
     // reached while scrolling slowly, or where scrolling comes to rest, but only stretches out if
     // you're still there when it arrives, so a stop you've already left never flashes up. Once
@@ -235,7 +289,14 @@ export function initScrollBall() {
         return lingering(now) ? lineBox : ballAt(lineBox);
       }
       const stop = next();
-      return stop ? ballAt(stop.box) : goal;
+      if (stop) {
+        const end = ballAt(stop.box);
+        // Level with the heading: slide across to it.
+        if (Math.abs(pos.y - end.y) < 1.5) return end;
+        // Off the track (e.g. just left another stop): get back on it first, then ride.
+        return onTrack() ? trackAt(end.y) : trackAt(pos.y);
+      }
+      return onTrack() ? goal : trackAt(pos.y);
     }
 
     function step(now: number) {
@@ -266,7 +327,7 @@ export function initScrollBall() {
         // Already scrolled past it: skip it and ride on.
         pending = null;
         moving = true;
-      } else if (!line && next() && Math.hypot(pos.x - aim.x, pos.y - aim.y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
+      } else if (!line && next() && Math.hypot(pos.x - ballAt(next()!.box).x, pos.y - ballAt(next()!.box).y) < 4 && Math.hypot(vel.x, vel.y) < 400) {
         // Close enough, and not still flying past: start stretching.
         const stop = next()!;
         line = stop.el;
@@ -297,14 +358,14 @@ export function initScrollBall() {
       if (reduceMotion.matches) {
         showStill();
       } else if (!frame) {
+        // Read once per burst rather than every frame; it changes with the theme.
+        trailColor = getComputedStyle(ball!).backgroundColor;
         frame = requestAnimationFrame(step);
       }
     }
 
     function resize() {
-      const dpr = devicePixelRatio || 1;
-      canvas!.width = innerWidth * dpr;
-      canvas!.height = innerHeight * dpr;
+      sizeTrail();
       update();
     }
 
@@ -317,6 +378,7 @@ export function initScrollBall() {
       line = goalLine;
       lineBox = goal;
       pending = null;
+      trail = [];
       render();
     }
 
@@ -352,7 +414,7 @@ export function initScrollBall() {
 
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
-    new ResizeObserver(update).observe(main);
+    new ResizeObserver(resize).observe(main);
     resize();
   }
 }
