@@ -12,6 +12,7 @@ const roles = [
       'Built a way for customers to bring content made in Flex into their own sites and apps without relying on iframes.',
       'Worked on performance across the stack — for example, a few recent changes made our server-side and static rendering around 30% faster.',
     ],
+    stack: ['Next.js', 'Y.js', 'WebSockets', 'NestJS', 'PostgreSQL', 'Terraform'],
   },
   {
     title: 'Lead Software Engineer',
@@ -23,6 +24,7 @@ const roles = [
       'Was part of a cross-team effort with QE and DevOps on our end-to-end pipeline: around 10,000 Playwright tests on custom AWS runners in 6–8 minutes on every PR.',
       'Helped reshape our engineering culture at Ceros, balancing quality, security and speed of delivery in the age of AI-assisted development.',
     ],
+    stack: ['Lit / Web Components', 'Turborepo', 'Vite', 'Vitest', 'Playwright'],
   },
   {
     title: 'Senior Staff Software Engineer',
@@ -32,6 +34,7 @@ const roles = [
       'Built an AI assistant that worked across Ceros products, with ideas that were early at the time: a voice-to-voice mode before realtime APIs were common, artifact-style outputs, and a visual guide that let vision models point at exact spots on an image.',
       'The project was sunset after a change in leadership and strategy, but what we learned building it carried into AI features across Ceros products.',
     ],
+    stack: ['React', 'Python', 'FastAPI', 'LangChain', 'Temporal', 'Pinecone'],
   },
   {
     title: 'Senior, then Lead Software Engineer',
@@ -42,10 +45,9 @@ const roles = [
       'Built a native screenshot pipeline (snapshot, rebuild, headless browser) that beat any HTML-to-image library on consistency, and helped architect instant and digest notifications for email, Slack and Teams.',
       'Learned to build from customer evidence: analytics, customer learning sessions and a Slack community where you see the effect of a fix the same day.',
     ],
+    stack: ['React', 'Express', 'BullMQ', 'AWS SQS', 'DynamoDB', 'Chrome extension'],
   },
 ];
-
-const skills = ['TypeScript', 'React & Next.js', 'Node.js', 'Y.js & CRDTs', 'Real-time sync', 'Web Components', 'Playwright', 'Terraform', 'PostgreSQL'];
 ---
 
 <BaseLayout
@@ -74,8 +76,11 @@ const skills = ['TypeScript', 'React & Next.js', 'Node.js', 'Y.js & CRDTs', 'Rea
             <h3>{role.title} <span class="muted">· {role.project}</span></h3>
             <span class="muted when">{role.when}</span>
           </div>
-          <ul>
+          <ul class="points">
             {role.points.map((point) => <li>{point}</li>)}
+          </ul>
+          <ul class="tags" aria-label="Stack">
+            {role.stack.map((tool) => <li>{tool}</li>)}
           </ul>
         </li>
       ))}
@@ -94,9 +99,6 @@ const skills = ['TypeScript', 'React & Next.js', 'Node.js', 'Y.js & CRDTs', 'Rea
     <p>
       I like small teams with clear goals, and products shaped by evidence about their users.
     </p>
-    <ul class="tags" aria-label="Tools I use most">
-      {skills.map((skill) => <li>{skill}</li>)}
-    </ul>
   </section>
 
   <section>
@@ -126,13 +128,13 @@ const skills = ['TypeScript', 'React & Next.js', 'Node.js', 'Y.js & CRDTs', 'Rea
   h3 { font-size: 1.05rem; margin: 0; }
   h3 .muted { font-weight: 400; }
   .when { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-  .roles ul { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; }
-  .tags { list-style: none; padding: 0; margin: 1rem 0 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .points { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; }
+  .tags { list-style: none; padding: 0; margin: 0.75rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .tags li {
-    padding: 0.2rem 0.65rem;
+    padding: 0.1rem 0.55rem;
     border: 1px solid var(--border);
     border-radius: 999px;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--muted);
   }
 </style>
