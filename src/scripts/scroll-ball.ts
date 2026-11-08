@@ -45,21 +45,66 @@ export function initScrollBall() {
       return { top, left, width: el.offsetWidth, height: el.offsetHeight };
     }
 
+    // A stop starts a little before its zone reaches the reading line, and holds for the first
+    // part of the zone — at least 140px of scrolling even for short sections — so a quick scroll
+    // still gives the ball time to get there. The last stop holds for good.
+    const land = (i: number) => box(stops[i].zone).top - 48;
+    function hold(i: number) {
+      const zone = box(stops[i].zone);
+      return i === stops.length - 1 ? Infinity : zone.top + clamp(zone.height * 0.45, 140, 220);
+    }
+
     // The ball follows a reading line, in main's coordinates, normally 40% down the viewport.
     // At the top it starts just under the title, and towards the bottom it speeds up to reach the
     // "Get in touch" button, which would otherwise never get that far up the screen. Both ramps
     // keep the ball moving continuously instead of jumping.
     function readingLine() {
       const middle = innerHeight * 0.4;
-      // Page positions (where they'd be in the viewport at scroll 0).
+      // main's position on the page, and the title's bottom where it sits in the viewport at the top.
       const mainTop = main!.getBoundingClientRect().top + scrollY;
       const top = mainTop + box(title!).top + box(title!).height + 4;
       const maxScroll = document.documentElement.scrollHeight - innerHeight;
-      const bottom = mainTop + box(touch!).top + box(touch!).height - maxScroll;
-      let line = middle;
-      if (middle > top) line = top + (middle - top) * clamp(scrollY / (middle - top), 0, 1);
-      if (bottom > middle) line += (bottom - line) * clamp(1 - (maxScroll - scrollY) / (bottom - middle), 0, 1);
-      return line - main!.getBoundingClientRect().top;
+      const lineAt = (sy: number) =>
+        sy + middle - mainTop - (middle > top ? (middle - top) * (1 - clamp(sy / (middle - top), 0, 1)) : 0);
+      const line = lineAt(scrollY);
+
+      // Over the last stretch of scrolling the line has to catch up with the button. It does that
+      // only while travelling between stops: through a stop's hold it keeps its normal pace, so
+      // the sections near the bottom get as long a stop as the rest. The stretch starts early
+      // enough to fit those holds plus at least 80px of travel.
+      const end = box(touch!).top + box(touch!).height;
+      const behind = end - lineAt(maxScroll);
+      if (behind <= 0) return line;
+      let start = Math.max(maxScroll - behind, 0);
+      let holds: [number, number][] = [];
+      let held = 0;
+      for (let tries = 0; tries < 3; tries++) {
+        const from = lineAt(start);
+        holds = stops
+          .slice(0, -1)
+          .map((_, i): [number, number] => [clamp(land(i), from, end), clamp(hold(i), from, end)])
+          .filter(([a, b]) => b > a);
+        held = holds.reduce((sum, [a, b]) => sum + b - a, 0);
+        if (maxScroll - start >= held + 80 || start === 0) break;
+        start = Math.max(maxScroll - held - 80, 0);
+      }
+      if (scrollY <= start) return line;
+
+      const from = lineAt(start);
+      const travelScroll = Math.max(maxScroll - start - held, 0);
+      const travelLine = end - from - held;
+      const travel = (d: number) => (travelLine > 0 ? (d / travelLine) * travelScroll : 0);
+      let at = from;
+      let left = scrollY - start;
+      for (const [a, b] of [...holds, [end, end]]) {
+        const ride = travel(a - at);
+        if (left <= ride) return at + (a - at) * (ride ? left / ride : 1);
+        left -= ride;
+        if (left <= b - a) return a + left;
+        left -= b - a;
+        at = b;
+      }
+      return end;
     }
 
     // The ball's track hugs the outer edge of the left margin, well clear of the text.
@@ -84,14 +129,6 @@ export function initScrollBall() {
       if (scrollY < 16) return shape(title!);
 
       const y = readingLine();
-      // A stop starts a little before its zone reaches the reading line, and holds for the first
-      // part of the zone — at least 140px of scrolling even for short sections — so a quick scroll
-      // still gives the ball time to get there. The last stop holds for good.
-      const land = (i: number) => box(stops[i].zone).top - 48;
-      const hold = (i: number) => {
-        const zone = box(stops[i].zone);
-        return i === stops.length - 1 ? Infinity : zone.top + clamp(zone.height * 0.45, 140, 220);
-      };
       const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
 
@@ -135,6 +172,14 @@ export function initScrollBall() {
       const stretch = pos.w < dot * 2 ? clamp(speed / 6000, 0, 0.12) : 0;
       const angle = Math.atan2(vel.y, vel.x);
       touch!.classList.toggle('lit', line === touch && pos.w > dot * 2);
+      // The role the ball underlines is the one in focus; the others dim. Between stops the last
+      // one stays in focus, and any other stop (title, later sections, button) clears it, so the
+      // dimming always matches the underline.
+      if (line) {
+        const active = roles.findIndex((role) => role.contains(line));
+        roles.forEach((role, i) => role.classList.toggle('active', i === active));
+        list!.classList.toggle('dim', active >= 0);
+      }
       ball!.style.width = `${pos.w}px`;
       ball!.style.height = `${pos.h}px`;
       ball!.style.transform =
@@ -244,10 +289,6 @@ export function initScrollBall() {
       else if (speed > FAST_PX_PER_S) {
         if (!line) pending = null;
       } else if (goalLine && !pending) pending = { el: goalLine, box: goal };
-      const y = readingLine();
-      const active = roles.findLastIndex((role) => box(role).top <= y);
-      roles.forEach((role, i) => role.classList.toggle('active', i === active));
-      list!.classList.toggle('dim', scrollY >= 16 && active >= 0 && y <= box(timeline!).top + box(timeline!).height);
       if (reduceMotion.matches) {
         showStill();
       } else if (!frame) {
