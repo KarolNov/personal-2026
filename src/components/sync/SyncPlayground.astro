@@ -415,10 +415,10 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
         ? el.animate({ offsetDistance: ['50%', '50%'], opacity: [0, 1, 1, 0] }, { duration: ms })
         : el.animate(
             [
-              { offsetDistance: along(dir, 0), opacity: 0, scale: 0.8 },
-              { opacity: 1, scale: 1, offset: 0.08 },
-              { opacity: 1, scale: 1, offset: 0.92 },
-              { offsetDistance: along(dir, 100), opacity: 0, scale: 0.9 },
+              { offsetDistance: along(dir, 0), opacity: 0, transform: 'scale(0.8)' },
+              { opacity: 1, transform: 'scale(1)', offset: 0.08 },
+              { opacity: 1, transform: 'scale(1)', offset: 0.92 },
+              { offsetDistance: along(dir, 100), opacity: 0, transform: 'scale(0.9)' },
             ],
             { duration: ms, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
           );
@@ -436,11 +436,11 @@ const { mode, initial = 'Hello', title = TITLES[mode] } = Astro.props;
         ? el.animate({ offsetDistance: [along(dir, 30), along(dir, 30)], opacity: [0, 1, 1, 0] }, { duration: BOUNCE_MS })
         : el.animate(
             [
-              { offsetDistance: along(dir, 2), opacity: 0, scale: 0.7, easing: 'cubic-bezier(0.4, 0, 1, 1)' },
-              { offsetDistance: along(dir, 41), opacity: 1, scale: 1, offset: 0.42, easing: 'ease-out' },
-              { offsetDistance: along(dir, 34), opacity: 1, scale: 0.95, offset: 0.56, easing: 'ease-in' },
-              { offsetDistance: along(dir, 38), opacity: 0.85, scale: 0.95, offset: 0.64, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
-              { offsetDistance: along(dir, 2), opacity: 0, scale: 0.6 },
+              { offsetDistance: along(dir, 2), opacity: 0, transform: 'scale(0.7)', easing: 'cubic-bezier(0.4, 0, 1, 1)' },
+              { offsetDistance: along(dir, 41), opacity: 1, transform: 'scale(1)', offset: 0.42, easing: 'ease-out' },
+              { offsetDistance: along(dir, 34), opacity: 1, transform: 'scale(0.95)', offset: 0.56, easing: 'ease-in' },
+              { offsetDistance: along(dir, 38), opacity: 0.85, transform: 'scale(0.95)', offset: 0.64, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
+              { offsetDistance: along(dir, 2), opacity: 0, transform: 'scale(0.6)' },
             ],
             { duration: BOUNCE_MS },
           );
