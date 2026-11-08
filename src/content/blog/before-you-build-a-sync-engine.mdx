@@ -15,7 +15,7 @@ been its sync engine, which is designed to cope with flaky connections and keeps
 it on [Yjs](https://yjs.dev), rebuilt the way changes flow through it once, and learnt most of what's in this series
 the hard way.
 
-The biggest lesson surprised me. The algorithms are the part that's already solved. What's hard is everything
+The algorithms turned out to be the part that's already solved. What's hard is everything
 around them: how you shape your data, what you do when a merge produces nonsense, how you undo, restore and
 migrate while other people keep working. This first post is the map. The rest of the series goes deep on one
 problem at a time, each with a demo you can break yourself.
