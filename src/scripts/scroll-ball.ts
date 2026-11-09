@@ -171,12 +171,20 @@ export function initScrollBall() {
       const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
 
-      // At rest between two stops, settle on whichever heading is nearer the reading line.
+      // At rest between two stops, settle on whichever heading is nearer the reading line, as long
+      // as it's on screen: one that has scrolled out of view would send the ball off with it.
+      // With neither in view, the ball stays on the track.
       const prev = index < 0 ? title! : stops[index].el;
       const upcoming = stops[index + 1].el;
-      if (resting) {
-        const nearer = Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming;
-        const other = nearer === prev ? upcoming : prev;
+      const inView = (el: HTMLElement) => {
+        const at = centre(el) + main!.getBoundingClientRect().top;
+        return at > 0 && at < innerHeight;
+      };
+      const options = [prev, upcoming].filter(inView);
+      if (resting && options.length) {
+        const [a, b = a] = options;
+        const nearer = Math.abs(centre(a) - y) <= Math.abs(centre(b) - y) ? a : b;
+        const other = nearer === a ? b : a;
         const keep = restPick === other && Math.abs(centre(other) - y) - Math.abs(centre(nearer) - y) < SWITCH_PX;
         restPick = keep ? other : nearer;
         return shape(restPick);
@@ -465,21 +473,23 @@ export function initScrollBall() {
       resting = false;
       restPick = null;
       clearTimeout(restTimer);
-      // Where scrollend is supported it marks the end of momentum scrolling; otherwise a short
-      // pause in scroll events stands in for it.
-      if (!hasScrollEnd) restTimer = window.setTimeout(onRest, 80);
+      // A short pause in scroll events means scrolling has stopped. scrollend says so sooner where
+      // it fires, but it isn't relied on: iOS doesn't always deliver it, and a ball waiting for it
+      // would never settle.
+      restTimer = window.setTimeout(onRest, 120);
       update();
     }
 
     function onRest() {
+      if (resting) return;
+      clearTimeout(restTimer);
       speed = 0;
       resting = true;
       restY = scrollY;
       update();
     }
 
-    const hasScrollEnd = 'onscrollend' in window;
-    if (hasScrollEnd) addEventListener('scrollend', onRest);
+    document.addEventListener('scrollend', onRest);
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(resize).observe(main);
