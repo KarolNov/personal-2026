@@ -119,8 +119,11 @@ export function initScrollBall() {
       return end;
     }
 
-    // The ball's track hugs the outer edge of the left margin, well clear of the text.
-    const trackX = () => box(timeline!).left + 2;
+    // The ball's track hugs the outer edge of the left margin, well clear of the text. On phones
+    // that margin is just the screen edge, so the track runs down the text's left edge instead,
+    // where the underlines start, and the ball doesn't dart sideways at every stop.
+    const trackX = () =>
+      timeline!.getBoundingClientRect().left < dot * 2 ? box(list!).left : box(timeline!).left + 2;
 
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
