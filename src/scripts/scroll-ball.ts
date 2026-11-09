@@ -45,21 +45,25 @@ export function initScrollBall() {
       return { top, left, width: el.offsetWidth, height: el.offsetHeight };
     }
 
-    // A stop starts a little before its zone reaches the reading line, and holds for the first
-    // part of the zone — at least 140px of scrolling even for short sections — so a quick scroll
-    // still gives the ball time to get there. The last stop holds for good.
+    // The ball follows a reading line, in main's coordinates, normally this far down the viewport.
+    const MIDDLE = 0.4;
+
+    // A stop starts a little before its zone reaches the reading line, and holds until its
+    // heading starts to leave the top of the screen, or the next stop starts, whichever is first.
+    // It holds for at least 140px of scrolling, so a quick scroll still gives the ball time to get
+    // there. The last stop holds for good.
     const land = (i: number) => box(stops[i].zone).top - 48;
     function hold(i: number) {
-      const zone = box(stops[i].zone);
-      return i === stops.length - 1 ? Infinity : zone.top + clamp(zone.height * 0.45, 140, 220);
+      if (i === stops.length - 1) return Infinity;
+      const leaving = box(stops[i].el).top + innerHeight * MIDDLE;
+      return Math.max(Math.min(leaving, land(i + 1)), box(stops[i].zone).top + 140);
     }
 
-    // The ball follows a reading line, in main's coordinates, normally 40% down the viewport.
-    // At the top it starts just under the title, and towards the bottom it speeds up to reach the
-    // "Get in touch" button, which would otherwise never get that far up the screen. Both ramps
-    // keep the ball moving continuously instead of jumping.
+    // At the top of the page the reading line starts just under the title, and towards the bottom
+    // it speeds up to reach the "Get in touch" button, which would otherwise never get that far up
+    // the screen. Both ramps keep the ball moving continuously instead of jumping.
     function readingLine() {
-      const middle = innerHeight * 0.4;
+      const middle = innerHeight * MIDDLE;
       // main's position on the page, and the title's bottom where it sits in the viewport at the top.
       const mainTop = main!.getBoundingClientRect().top + scrollY;
       const top = mainTop + box(title!).top + box(title!).height + 4;
@@ -73,8 +77,11 @@ export function initScrollBall() {
       // the sections near the bottom get as long a stop as the rest. Each stretch of travel also
       // gets at least MIN_TRAVEL px of scrolling, however short: leaving one stop and arriving at
       // the next takes the ball a moment, and with less it lands too late, after you've already
-      // scrolled past. The catch-up stretch starts early enough to fit all of that.
-      const MIN_TRAVEL = 160;
+      // scrolled past. Holds shrink too if they must, but to no less than MIN_FIT of their length:
+      // the catch-up stretch starts early enough for that, and no earlier, so stops above it keep
+      // their full hold.
+      const MIN_TRAVEL = 120;
+      const MIN_FIT = 0.7;
       const end = box(touch!).top + box(touch!).height;
       const behind = end - lineAt(maxScroll);
       if (behind <= 0) return line;
@@ -82,7 +89,7 @@ export function initScrollBall() {
       let holds: [number, number][] = [];
       let held = 0;
       let gaps = 0;
-      for (let tries = 0; tries < 6; tries++) {
+      for (let tries = 0; tries < 8; tries++) {
         const from = lineAt(start);
         holds = stops
           .slice(0, -1)
@@ -90,17 +97,21 @@ export function initScrollBall() {
           .filter(([a, b]) => b > a);
         held = holds.reduce((sum, [a, b]) => sum + b - a, 0);
         gaps = [from, ...holds.map(([, b]) => b)].filter((at, i) => (holds[i]?.[0] ?? end) > at).length;
-        if (maxScroll - start - held >= MIN_TRAVEL * gaps || start === 0) break;
-        start = Math.max(maxScroll - held - MIN_TRAVEL * gaps, 0);
+        // Starting earlier adds as much scroll as it adds to what has to fit in it, so the
+        // shortfall shrinks by (1 - MIN_FIT) per pixel moved back.
+        const short = MIN_FIT * (held + MIN_TRAVEL * gaps) - (maxScroll - start);
+        if (short <= 1 || start === 0) break;
+        start = Math.max(start - short / (1 - MIN_FIT), 0);
       }
       if (scrollY <= start) return line;
 
       // Each stretch of travel gets its minimum, and the scrolling left over is shared out by
-      // distance.
+      // distance. Where there isn't room for all of that, the holds and the travel shrink alike.
       const from = lineAt(start);
-      const travelScroll = Math.max(maxScroll - start - held, 0);
+      const fit = Math.min((maxScroll - start) / (held + MIN_TRAVEL * gaps), 1);
+      const travelScroll = maxScroll - start - held * fit;
       const travelLine = end - from - held;
-      const least = gaps ? Math.min(MIN_TRAVEL, travelScroll / gaps) : 0;
+      const least = gaps ? Math.min(MIN_TRAVEL * fit, travelScroll / gaps) : 0;
       const travel = (d: number) =>
         d > 0 && travelLine > 0 ? least + (d / travelLine) * (travelScroll - least * gaps) : 0;
       let at = from;
@@ -109,8 +120,8 @@ export function initScrollBall() {
         const ride = travel(a - at);
         if (left <= ride) return at + (a - at) * (ride ? left / ride : 1);
         left -= ride;
-        if (left <= b - a) return a + left;
-        left -= b - a;
+        if (left <= (b - a) * fit) return a + left / fit;
+        left -= (b - a) * fit;
         at = b;
       }
       return end;
