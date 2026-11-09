@@ -56,12 +56,12 @@ export function initScrollBall() {
     function hold(i: number) {
       if (i === stops.length - 1) return Infinity;
       const leaving = box(stops[i].el).top + innerHeight * MIDDLE;
-      return Math.max(Math.min(leaving, land(i + 1)), box(stops[i].zone).top + 140);
+      return Math.min(Math.max(leaving, box(stops[i].zone).top + 140), land(i + 1));
     }
 
-    // At the top of the page the reading line starts just under the title, and towards the bottom
-    // it speeds up to reach the "Get in touch" button, which would otherwise never get that far up
-    // the screen. Both ramps keep the ball moving continuously instead of jumping.
+    // At the top of the page the reading line starts just under the title, so the ball moves
+    // continuously instead of jumping. Towards the bottom some stops would never reach it before
+    // the page runs out, so there it's bent to bring them in.
     function readingLine() {
       const middle = innerHeight * MIDDLE;
       // main's position on the page, and the title's bottom where it sits in the viewport at the top.
@@ -70,59 +70,51 @@ export function initScrollBall() {
       const maxScroll = document.documentElement.scrollHeight - innerHeight;
       const lineAt = (sy: number) =>
         sy + middle - mainTop - (middle > top ? (middle - top) * (1 - clamp(sy / (middle - top), 0, 1)) : 0);
-      const line = lineAt(scrollY);
-
-      // Over the last stretch of scrolling the line has to catch up with the button. It does that
-      // only while travelling between stops: through a stop's hold it keeps its normal pace, so
-      // the sections near the bottom get as long a stop as the rest. Each stretch of travel also
-      // gets at least MIN_TRAVEL px of scrolling, however short: leaving one stop and arriving at
-      // the next takes the ball a moment, and with less it lands too late, after you've already
-      // scrolled past. Holds shrink too if they must, but to no less than MIN_FIT of their length:
-      // the catch-up stretch starts early enough for that, and no earlier, so stops above it keep
-      // their full hold.
-      const MIN_TRAVEL = 120;
-      const MIN_FIT = 0.7;
       const end = box(touch!).top + box(touch!).height;
-      const behind = end - lineAt(maxScroll);
-      if (behind <= 0) return line;
-      let start = Math.max(maxScroll - behind, 0);
-      let holds: [number, number][] = [];
-      let held = 0;
-      let gaps = 0;
-      for (let tries = 0; tries < 8; tries++) {
-        const from = lineAt(start);
-        holds = stops
-          .slice(0, -1)
-          .map((_, i): [number, number] => [clamp(land(i), from, end), clamp(hold(i), from, end)])
-          .filter(([a, b]) => b > a);
-        held = holds.reduce((sum, [a, b]) => sum + b - a, 0);
-        gaps = [from, ...holds.map(([, b]) => b)].filter((at, i) => (holds[i]?.[0] ?? end) > at).length;
-        // Starting earlier adds as much scroll as it adds to what has to fit in it, so the
-        // shortfall shrinks by (1 - MIN_FIT) per pixel moved back.
-        const short = MIN_FIT * (held + MIN_TRAVEL * gaps) - (maxScroll - start);
-        if (short <= 1 || start === 0) break;
-        start = Math.max(start - short / (1 - MIN_FIT), 0);
-      }
-      if (scrollY <= start) return line;
+      if (lineAt(maxScroll) >= end) return lineAt(scrollY);
 
-      // Each stretch of travel gets its minimum, and the scrolling left over is shared out by
-      // distance. Where there isn't room for all of that, the holds and the travel shrink alike.
-      const from = lineAt(start);
-      const fit = Math.min((maxScroll - start) / (held + MIN_TRAVEL * gaps), 1);
-      const travelScroll = maxScroll - start - held * fit;
-      const travelLine = end - from - held;
-      const least = gaps ? Math.min(MIN_TRAVEL * fit, travelScroll / gaps) : 0;
-      const travel = (d: number) =>
-        d > 0 && travelLine > 0 ? least + (d / travelLine) * (travelScroll - least * gaps) : 0;
-      let at = from;
-      let left = scrollY - start;
-      for (const [a, b] of [...holds, [end, end]]) {
-        const ride = travel(a - at);
-        if (left <= ride) return at + (a - at) * (ride ? left / ride : 1);
-        left -= ride;
-        if (left <= (b - a) * fit) return a + left / fit;
-        left -= (b - a) * fit;
-        at = b;
+      // The scroll position where the line naturally reaches a point (lineAt only ever rises).
+      const scrollAt = (line: number) => {
+        let [lo, hi] = [0, Math.max(line + mainTop, 1)];
+        for (let k = 0; k < 24; k++) {
+          const mid = (lo + hi) / 2;
+          if (lineAt(mid) < line) lo = mid;
+          else hi = mid;
+        }
+        return hi;
+      };
+
+      // Working back from the bottom, each stop starts and lets go where it naturally would, or
+      // as late as still leaves room for the stops below it: up to MIN_HOLD px of scrolling on
+      // each and, before a heading that had to be brought in early, MIN_TRAVEL to get there, as
+      // leaving one stop and arriving at the next takes the ball a moment. Both are kept small,
+      // as on a short screen the last few stops share its last stretch of scrolling. The
+      // "Get in touch" button arrives just before the bottom.
+      const MIN_HOLD = 160;
+      const MIN_TRAVEL = 60;
+      const last = stops.length - 1;
+      let next = Math.min(scrollAt(land(last)), maxScroll - 24);
+      const knots: [number, number][] = [[next, land(last)], [maxScroll, end]];
+      for (let i = last - 1; i >= 0; i--) {
+        const starts = scrollAt(land(i));
+        const ends = scrollAt(hold(i));
+        // A stop that hands straight over to the next one needs no travel.
+        const early = i + 1 < last && hold(i) < land(i + 1) && next < scrollAt(land(i + 1)) - 0.5;
+        const held = Math.min(ends, next - (early ? MIN_TRAVEL : 0));
+        next = Math.min(starts, held - Math.min(ends - starts, MIN_HOLD));
+        knots.unshift([next, land(i)], [held, hold(i)]);
+      }
+
+      // Between those points the line moves steadily, at its natural pace where it can.
+      const natural = ([sy, line]: [number, number]) => Math.abs(lineAt(sy) - line) < 0.5;
+      let prev: [number, number] = [0, lineAt(0)];
+      for (const knot of knots) {
+        if (scrollY <= knot[0]) {
+          if (natural(prev) && natural(knot)) return lineAt(scrollY);
+          const span = knot[0] - prev[0];
+          return span > 0 ? prev[1] + ((knot[1] - prev[1]) * (scrollY - prev[0])) / span : knot[1];
+        }
+        prev = knot;
       }
       return end;
     }
