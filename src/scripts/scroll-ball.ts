@@ -70,30 +70,39 @@ export function initScrollBall() {
 
       // Over the last stretch of scrolling the line has to catch up with the button. It does that
       // only while travelling between stops: through a stop's hold it keeps its normal pace, so
-      // the sections near the bottom get as long a stop as the rest. The stretch starts early
-      // enough to fit those holds plus at least 80px of travel.
+      // the sections near the bottom get as long a stop as the rest. Each stretch of travel also
+      // gets at least MIN_TRAVEL px of scrolling, however short: leaving one stop and arriving at
+      // the next takes the ball a moment, and with less it lands too late, after you've already
+      // scrolled past. The catch-up stretch starts early enough to fit all of that.
+      const MIN_TRAVEL = 160;
       const end = box(touch!).top + box(touch!).height;
       const behind = end - lineAt(maxScroll);
       if (behind <= 0) return line;
       let start = Math.max(maxScroll - behind, 0);
       let holds: [number, number][] = [];
       let held = 0;
-      for (let tries = 0; tries < 3; tries++) {
+      let gaps = 0;
+      for (let tries = 0; tries < 6; tries++) {
         const from = lineAt(start);
         holds = stops
           .slice(0, -1)
           .map((_, i): [number, number] => [clamp(land(i), from, end), clamp(hold(i), from, end)])
           .filter(([a, b]) => b > a);
         held = holds.reduce((sum, [a, b]) => sum + b - a, 0);
-        if (maxScroll - start >= held + 80 || start === 0) break;
-        start = Math.max(maxScroll - held - 80, 0);
+        gaps = [from, ...holds.map(([, b]) => b)].filter((at, i) => (holds[i]?.[0] ?? end) > at).length;
+        if (maxScroll - start - held >= MIN_TRAVEL * gaps || start === 0) break;
+        start = Math.max(maxScroll - held - MIN_TRAVEL * gaps, 0);
       }
       if (scrollY <= start) return line;
 
+      // Each stretch of travel gets its minimum, and the scrolling left over is shared out by
+      // distance.
       const from = lineAt(start);
       const travelScroll = Math.max(maxScroll - start - held, 0);
       const travelLine = end - from - held;
-      const travel = (d: number) => (travelLine > 0 ? (d / travelLine) * travelScroll : 0);
+      const least = gaps ? Math.min(MIN_TRAVEL, travelScroll / gaps) : 0;
+      const travel = (d: number) =>
+        d > 0 && travelLine > 0 ? least + (d / travelLine) * (travelScroll - least * gaps) : 0;
       let at = from;
       let left = scrollY - start;
       for (const [a, b] of [...holds, [end, end]]) {
@@ -155,15 +164,17 @@ export function initScrollBall() {
     }
 
     // A spring per property. Position is critically damped — a smooth ease-out with no overshoot,
-    // so the ball and its trail don't sway. Size keeps a little bounce when stretching into an
-    // underline, but retracts crisply with none, so the ball never dips to nothing on the way back.
+    // so the ball and its trail don't sway. Sideways moves are only the short hops on and off the
+    // track, so they're quicker, leaving the ball time to reach the next stop during a steady
+    // scroll. Size keeps a little bounce when stretching into an underline, but retracts crisply
+    // with none, so the ball never dips to nothing on the way back.
     const SPRING = {
-      x: { stiffness: 320, damping: 36 },
+      x: { stiffness: 700, damping: 53 },
       y: { stiffness: 320, damping: 36 },
       w: { stiffness: 220, damping: 20 },
       h: { stiffness: 220, damping: 20 },
     };
-    const RETRACT = { stiffness: 300, damping: 35 };
+    const RETRACT = { stiffness: 600, damping: 49 };
     let { box: goal, line: goalLine } = target();
     const pos: Box = { ...goal };
     const vel: Box = { x: 0, y: 0, w: 0, h: 0 };
@@ -272,7 +283,7 @@ export function initScrollBall() {
     // A ball at the left end of an underline, and level with it on the track.
     const ballAt = (b: Box): Box => ({ x: b.x, y: b.y + b.h / 2 - dot / 2, w: dot, h: dot });
     const trackAt = (y: number): Box => ({ x: trackX(), y, w: dot, h: dot });
-    const onTrack = () => Math.abs(pos.x - trackX()) < 1;
+    const onTrack = () => Math.abs(pos.x - trackX()) < 2;
 
     // Shape changes happen in place, and only a round ball ever moves, so scrolling back and
     // forth mid-change never drags a half-shrunk line around. Leaving a stop, the underline
@@ -305,7 +316,7 @@ export function initScrollBall() {
       if (stop) {
         const end = ballAt(stop.box);
         // Level with the heading: slide across to it.
-        if (Math.abs(pos.y - end.y) < 1.5) return end;
+        if (Math.abs(pos.y - end.y) < 4) return end;
         // Off the track (e.g. just left another stop): get back on it first, then ride.
         return onTrack() ? trackAt(end.y) : trackAt(pos.y);
       }
@@ -332,7 +343,7 @@ export function initScrollBall() {
       // Move on to the next stage once this one is (nearly) done.
       if (line && line !== goalLine) {
         if (lingering(now)) moving = true;
-        else if (Math.abs(pos.w - dot) < 1 && Math.abs(pos.h - dot) < 1) {
+        else if (Math.abs(pos.w - dot) < 4 && Math.abs(pos.h - dot) < 4) {
           line = null;
           moving = true;
         }
