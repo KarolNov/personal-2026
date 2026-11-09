@@ -110,6 +110,10 @@ export function initScrollBall() {
     // The ball's track hugs the outer edge of the left margin, well clear of the text.
     const trackX = () => box(timeline!).left + 2;
 
+    // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
+    // between stops; at rest it always settles on a heading.
+    let resting = true;
+
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
     function target(): { box: Box; line: HTMLElement | null } {
@@ -131,6 +135,11 @@ export function initScrollBall() {
       const y = readingLine();
       const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
+
+      // At rest between two stops, settle on whichever heading is nearer the reading line.
+      const prev = index < 0 ? title! : stops[index].el;
+      const upcoming = stops[index + 1].el;
+      if (resting) return shape(Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming);
 
       // Otherwise ride down the track to the next stop. The ride is paced so the ball reaches the
       // next stop just as its zone reaches the reading line: it makes up the time it spent holding
@@ -408,9 +417,11 @@ export function initScrollBall() {
       const instant = (Math.abs(scrollY - lastScroll.y) / Math.max(now - lastScroll.t, 1)) * 1000;
       speed = speed * 0.6 + instant * 0.4;
       lastScroll = { y: scrollY, t: now };
+      resting = false;
       clearTimeout(restTimer);
       restTimer = window.setTimeout(() => {
         speed = 0;
+        resting = true;
         update();
       }, 80);
       update();
