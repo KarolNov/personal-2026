@@ -141,6 +141,13 @@ export function initScrollBall() {
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
     let resting = true;
+    // The heading picked at rest, and the scroll position it was picked at. A phone's momentum
+    // scroll trails off in small nudges; those don't wake the ball, and a heading it's already
+    // headed for only loses out to one that's clearly nearer, so it doesn't flick between two.
+    let restPick: HTMLElement | null = null;
+    let restY = 0;
+    const NUDGE_PX = 16;
+    const SWITCH_PX = 48;
 
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
@@ -167,7 +174,13 @@ export function initScrollBall() {
       // At rest between two stops, settle on whichever heading is nearer the reading line.
       const prev = index < 0 ? title! : stops[index].el;
       const upcoming = stops[index + 1].el;
-      if (resting) return shape(Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming);
+      if (resting) {
+        const nearer = Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming;
+        const other = nearer === prev ? upcoming : prev;
+        const keep = restPick === other && Math.abs(centre(other) - y) - Math.abs(centre(nearer) - y) < SWITCH_PX;
+        restPick = keep ? other : nearer;
+        return shape(restPick);
+      }
 
       // Otherwise ride down the track to the next stop. The ride is paced so the ball reaches the
       // next stop just as its zone reaches the reading line: it makes up the time it spent holding
@@ -448,16 +461,25 @@ export function initScrollBall() {
       const instant = (Math.abs(scrollY - lastScroll.y) / Math.max(now - lastScroll.t, 1)) * 1000;
       speed = speed * 0.6 + instant * 0.4;
       lastScroll = { y: scrollY, t: now };
+      if (resting && Math.abs(scrollY - restY) < NUDGE_PX) return update();
       resting = false;
+      restPick = null;
       clearTimeout(restTimer);
-      restTimer = window.setTimeout(() => {
-        speed = 0;
-        resting = true;
-        update();
-      }, 80);
+      // Where scrollend is supported it marks the end of momentum scrolling; otherwise a short
+      // pause in scroll events stands in for it.
+      if (!hasScrollEnd) restTimer = window.setTimeout(onRest, 80);
       update();
     }
 
+    function onRest() {
+      speed = 0;
+      resting = true;
+      restY = scrollY;
+      update();
+    }
+
+    const hasScrollEnd = 'onscrollend' in window;
+    if (hasScrollEnd) addEventListener('scrollend', onRest);
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(resize).observe(main);
