@@ -5,13 +5,17 @@ WEBVTT
 Sync engines, explained with playgrounds you can poke at.
 
 2
-00:00:07.076 --> 00:00:10.676
+00:00:07.078 --> 00:00:10.678
 Send the whole text, and someone's edit just vanishes.
 
 3
-00:00:16.806 --> 00:00:20.406
-A CRDT keeps both, so nobody loses work.
+00:00:16.250 --> 00:00:20.950
+OT has a server shift each edit around the other, so both survive.
 
 4
-00:00:26.026 --> 00:00:29.201
+00:00:27.506 --> 00:00:31.956
+A CRDT merges both on each device, no server needed.
+
+5
+00:00:36.333 --> 00:00:39.508
 And four quick questions suggest where to start.
