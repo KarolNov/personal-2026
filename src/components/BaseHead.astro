@@ -29,18 +29,19 @@ const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
     if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   } catch {}
 
-  // A post's title in a list and its heading on the post page share a view-transition-name,
-  // but list links only get it for navigations to or from that post. Naming them always would
-  // also morph titles between the home and blog lists, flying them across the page.
-  function nameLinkTo(url, transition) {
-    if (!url || !transition) return;
-    const link = document.querySelector(`a[data-vt-name][href="${new URL(url).pathname}"]`);
-    if (!link) return;
-    link.style.viewTransitionName = link.dataset.vtName;
-    transition.finished.finally(() => (link.style.viewTransitionName = ''));
-  }
-  addEventListener('pageswap', (e) => nameLinkTo(e.activation?.entry?.url, e.viewTransition));
-  addEventListener('pagereveal', (e) => nameLinkTo(window.navigation?.activation?.from?.url, e.viewTransition));
+  // List ↔ post navigations slide sideways instead of fading (see global.css). Direction comes
+  // from the URLs, so history back/forward slides the same way as clicking.
+  addEventListener('pagereveal', (e) => {
+    const root = document.documentElement;
+    delete root.dataset.nav;
+    const from = e.viewTransition && window.navigation?.activation?.from?.url;
+    if (!from) return;
+    const isPost = (path) => /^\/blog\/[^/]+\/?$/.test(path);
+    const isList = (path) => path === '/' || path === '/blog/';
+    const prev = new URL(from).pathname;
+    if (isList(prev) && isPost(location.pathname)) root.dataset.nav = 'forward';
+    else if (isPost(prev) && isList(location.pathname)) root.dataset.nav = 'back';
+  });
 </script>
 <Font cssVariable="--font-geist" preload />
 <Font cssVariable="--font-geist-mono" />

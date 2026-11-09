@@ -89,25 +89,28 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 
 /* View transitions — cross-document, no client router. The header stays put, the old page
-   fades out, and the new one is revealed by the stagger above. Post titles morph between
-   a list and that post's page; list links are only named for those navigations (BaseHead). */
+   fades out, and the new one is revealed by the stagger above. */
 @view-transition { navigation: auto; }
 
 ::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
+/* Pages differ in height and scroll, so morphing between their boxes swept content in from far
+   above when leaving a scrolled page. The group snaps to the new page; only the fades move. */
+::view-transition-group(page) { animation: none; }
 ::view-transition-old(page) { animation: 150ms var(--ease-out) both page-out; }
 ::view-transition-new(page) { animation: none; }
 
 @keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
 
-/* Both ends are sized to their text, so the morph scales without stretching; the blur hides
-   the cross-fade between the two text sizes. */
-.post-title { width: fit-content; view-transition-class: post-title; }
-::view-transition-group(.post-title) { animation-duration: 300ms; animation-timing-function: var(--ease-in-out); }
-::view-transition-old(.post-title) { animation: 300ms var(--ease-in-out) both title-out; }
-::view-transition-new(.post-title) { animation: 300ms var(--ease-in-out) both title-in; }
+/* Into a post from a list the page nudges in from the right; back out, from the left (BaseHead
+   sets data-nav). The slide replaces the stagger, which would move content diagonally. */
+:root[data-nav='forward'] { --nav-x: 1; }
+:root[data-nav='back'] { --nav-x: -1; }
+:root[data-nav]::view-transition-old(page) { animation: 120ms var(--ease-out) both nav-out; }
+:root[data-nav]::view-transition-new(page) { animation: 250ms var(--ease-out) 40ms both nav-in; }
+:root[data-nav] :is(.rise, .stagger > *) { animation: none; }
 
-@keyframes title-out { to { opacity: 0; filter: blur(2px); } }
-@keyframes title-in { from { opacity: 0; filter: blur(2px); } }
+@keyframes nav-out { to { opacity: 0; transform: translateX(calc(var(--nav-x) * -16px)); } }
+@keyframes nav-in { from { opacity: 0; transform: translateX(calc(var(--nav-x) * 24px)); } }
 
 /* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
 .theme-transition * { view-transition-name: none !important; }

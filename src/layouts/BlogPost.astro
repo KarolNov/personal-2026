@@ -2,7 +2,7 @@
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
-import { formatDate, titleTransitionName } from '../lib/posts';
+import { formatDate } from '../lib/posts';
 
 type Props = CollectionEntry<'blog'>['data'] & { id: string };
 
@@ -12,21 +12,30 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 <BaseLayout title={title} description={description} image={heroImage?.src ?? `/og/${id}.png`} stagger={false}>
   <article>
     <header>
+      <a class="back rise" href="/blog/"><span aria-hidden="true">←</span> All posts</a>
       <p class="muted meta rise">
         <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
         {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time></>}
       </p>
-      <h1 class="post-title" style={{ viewTransitionName: titleTransitionName(id) }}>{title}</h1>
+      <h1 class="rise" style="--i: 1">{title}</h1>
     </header>
-    {heroImage && <Image class="rise" style="--i: 1" src={heroImage} alt="" width={1200} loading="eager" />}
-    <div class="prose rise" style="--i: 1">
+    {heroImage && <Image class="rise" style="--i: 2" src={heroImage} alt="" width={1200} loading="eager" />}
+    <div class="prose rise" style="--i: 2">
       <slot />
     </div>
   </article>
-  <p class="rise" style="--i: 2"><a href="/blog/">← All posts</a></p>
+  <p class="rise" style="--i: 3"><a class="back" href="/blog/"><span aria-hidden="true">←</span> All posts</a></p>
 </BaseLayout>
 
 <style>
+  /* Long posts get the way back at both ends, kept quiet so it doesn't compete with the title. */
+  .back { font-size: 0.9rem; color: var(--muted); text-decoration: none; transition: color 150ms ease; }
+  .back span { display: inline-block; transition: transform 150ms var(--ease-out); }
+  @media (hover: hover) and (pointer: fine) {
+    .back:hover { color: var(--fg); }
+    .back:hover span { transform: translateX(-2px); }
+  }
+  header .back { display: inline-block; margin-bottom: 1.25rem; }
   .meta { margin: 0; font-size: 0.95rem; }
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
