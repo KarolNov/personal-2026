@@ -133,16 +133,10 @@ export function initScrollBall() {
     }
 
     // The ball's track hugs the outer edge of the left margin, well clear of the text. On phones
-    // that margin is just the screen edge, so the track runs down the middle of the gutter
-    // between the screen edge and the text, and underlines start from it: the ball lands and
-    // leaves without darting sideways.
-    const narrow = () => timeline!.getBoundingClientRect().left < dot * 2;
-    const trackX = () => {
-      if (!narrow()) return box(timeline!).left + 2;
-      const text = box(list!).left;
-      const gutter = list!.getBoundingClientRect().left;
-      return Math.round(text - gutter / 2 - dot / 2);
-    };
+    // that margin is just the screen edge, so the track runs right beside the text instead, and
+    // the hop between it and an underline is only a ball's width.
+    const trackX = () =>
+      timeline!.getBoundingClientRect().left < dot * 2 ? box(list!).left - dot - 2 : box(timeline!).left + 2;
 
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
@@ -156,9 +150,7 @@ export function initScrollBall() {
         const b = box(el);
         return el === touch
           ? { box: { x: b.left, y: b.top, w: b.width, h: b.height }, line: el }
-          : narrow()
-            ? { box: { x: trackX(), y: b.top + b.height + 3, w: b.left + b.width - trackX(), h: dot * 0.6 }, line: el }
-            : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
+          : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
       };
       const centre = (el: HTMLElement) => {
         const { box: b } = shape(el);
