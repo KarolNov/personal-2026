@@ -8,6 +8,7 @@ draft: true
 
 import MeatProxyChat from '../../components/ai/MeatProxyChat.astro';
 import ShowDontTellPR from '../../components/ai/ShowDontTellPR.astro';
+import Video from '../../components/Video.astro';
 
 You've probably seen this happen. Someone asks a question in a thread. A colleague pastes it into an LLM, copies
 the answer and posts it back: eight paragraphs, three headings, a bulleted list of "key considerations" and a
@@ -80,14 +81,37 @@ That's the part AI can help with, as long as it's pointed at the right job.
 The useful split I've found: don't use AI to write *your message*. Use it to produce the *things that let you
 show your work*, quickly enough that you'll actually do it.
 
-> **TODO:** this section needs the skill itself. Points to cover:
+For anything with a UI, I wanted the Loom without the takes, so I built a walkthrough skill. It started from
+[brag](https://github.com/latent-spaces/brag), which builds launch videos out of HTML. Mine records the real app
+instead. Claude reads the diff or the page, plans a 30 to 60 second story and writes it down as a script of
+steps. Playwright then clicks through the running app with an animated dot for a cursor, a voice reads each line,
+and out comes a video with captions, chapters and a thumbnail. Here's one it made of my last post:
+
+<Video
+  src="/media/sync-engine-walkthrough.mp4"
+  poster="/media/sync-engine-walkthrough.jpg"
+  captions="/media/sync-engine-walkthrough.vtt"
+  label="A narrated walkthrough of the Before you build a sync engine post, clicking through its playgrounds"
 >
-> - How it grew out of `/brag` (what `/brag` did, and what was missing).
-> - What it outputs: e.g. a script for a Loom, a seeded demo environment, a before/after screenshot set, a
->   click-through prototype. Be concrete.
-> - Where the human stays in the loop: you still record, you still decide what matters.
-> - One before/after example: the wall of text someone would have posted, next to what they shared instead.
-> - Link to the open-sourced skill (blocker: publish it first, ideally to the Claude plugin marketplace).
+  A design walkthrough of [Before you build a sync engine](/blog/before-you-build-a-sync-engine/): 32 seconds,
+  recorded against my local dev server. Nobody touched the mouse.
+</Video>
+
+It comes in two kinds. A design walkthrough explains why the UI is the way it is, for a review or a feature tour.
+A tutorial walkthrough does a task step by step, and writes a text version you can paste into help docs.
+
+Re-takes are cheap: change a line in the script, run it again, and only that line gets a new voice. But you stay
+in the loop where it matters. The skill shows you the plan before it records anything, and it won't make up the
+reasoning behind a design: if your notes don't say why, it asks you. It checks frames from its own video before
+handing it over, and you should still watch it before you send it. If it shows something you didn't expect,
+better you find out than your reviewer.
+
+It's open source, in my [skills repo](https://github.com/KarolNov/skills). In Claude Code:
+
+```text
+/plugin marketplace add KarolNov/skills
+/plugin install walkthrough@karolnov-skills
+```
 
 The point isn't that AI should stay out of how you communicate. It's that the parts people need from you, what
 you think, what you checked and what you want, have to come from you. AI is very good at everything around that:
