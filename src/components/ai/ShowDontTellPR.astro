@@ -1,0 +1,627 @@
+---
+// The CSV export fix from MeatProxyChat, opened as a pull request twice: once described by an LLM, once shown
+// with a diagram, before/after numbers and the merge danger. Everything is in the HTML, so without JavaScript
+// both timelines read top to bottom.
+// The script hides them and plays one timeline at a time, the way the review would actually unfold.
+
+interface Person {
+  name: string;
+  initials: string;
+  tone: 'author' | 'rev';
+}
+type Part =
+  | { kind: 'p'; text: string }
+  | { kind: 'h'; text: string }
+  | { kind: 'ul'; items: string[] }
+  | { kind: 'flow'; lanes: { label: string; steps: { text: string; result?: 'bad' | 'good' }[] }[] }
+  | { kind: 'table'; head: string[]; rows: string[][] };
+type Item =
+  | { kind: 'comment'; from: Person; when: string; parts: Part[]; delay: number; wall?: boolean }
+  | { kind: 'event'; from: Person; text: string; result: 'bad' | 'good'; delay: number; merge?: boolean };
+
+const alex: Person = { name: 'Alex', initials: 'A', tone: 'author' };
+const sam: Person = { name: 'Sam', initials: 'S', tone: 'rev' };
+const title = 'Stream CSV exports in chunks';
+
+const wall: Part[] = [
+  { kind: 'h', text: '📝 Overview' },
+  {
+    kind: 'p',
+    text: 'This PR introduces a robust, scalable streaming approach to CSV exports, significantly improving performance and reliability for large datasets. It represents an important step forward in our ongoing commitment to delivering a seamless, best-in-class export experience.',
+  },
+  { kind: 'h', text: '🎯 Motivation' },
+  {
+    kind: 'p',
+    text: 'In today’s data-driven landscape, users increasingly rely on exporting large volumes of data. The previous implementation, while functional, presented opportunities for optimisation when handling larger datasets. This change addresses those opportunities head-on.',
+  },
+  { kind: 'h', text: '🔧 Changes' },
+  {
+    kind: 'ul',
+    items: [
+      'Refactored the export service to process rows in configurable chunks.',
+      'Implemented graceful handling of cancelled exports.',
+      'Added comprehensive error handling for edge cases.',
+      'Improved memory efficiency throughout the export pipeline.',
+      'Enhanced code readability and maintainability.',
+      'Updated relevant tests to reflect the new behaviour.',
+    ],
+  },
+  { kind: 'h', text: '🏗️ Technical details' },
+  {
+    kind: 'p',
+    text: 'The new implementation leverages a streaming architecture that processes data incrementally. This ensures that memory usage remains bounded regardless of dataset size, while also providing a solid foundation for future enhancements to the export pipeline.',
+  },
+  { kind: 'h', text: '✨ Benefits' },
+  {
+    kind: 'ul',
+    items: [
+      'Improved performance: exports are faster and more efficient.',
+      'Enhanced reliability: fewer failures for large datasets.',
+      'Better scalability: the system can handle growing data volumes.',
+      'Improved user experience: users can export data with confidence.',
+    ],
+  },
+  { kind: 'h', text: '🧪 Testing' },
+  {
+    kind: 'ul',
+    items: [
+      'All existing tests pass.',
+      'The changes have been thoroughly validated to ensure correctness.',
+      'Edge cases have been carefully considered.',
+    ],
+  },
+  { kind: 'h', text: '⚠️ Potential risks' },
+  {
+    kind: 'p',
+    text: 'As with any change to a core system, there is a possibility of unforeseen issues. However, the risk is considered low given the comprehensive nature of the changes.',
+  },
+  { kind: 'h', text: '🔮 Future improvements' },
+  {
+    kind: 'ul',
+    items: [
+      'Consider adding support for additional export formats.',
+      'Explore further performance optimisations.',
+      'Gather user feedback to inform future iterations.',
+    ],
+  },
+  { kind: 'h', text: '✅ Conclusion' },
+  {
+    kind: 'p',
+    text: 'Overall, this change enhances the user experience for customers with large accounts and lays a strong foundation for future scalability. Please let me know if you have any questions or feedback! 🚀',
+  },
+];
+
+const scenes = [
+  {
+    id: 'dont',
+    label: 'Don’t',
+    items: [
+      { kind: 'comment', from: alex, when: 'opened this pull request', delay: 0, wall: true, parts: wall },
+      {
+        kind: 'comment',
+        from: sam,
+        when: 'commented 2 hours later',
+        delay: 1200,
+        parts: [
+          {
+            kind: 'p',
+            text: 'It says cancelled exports are handled, but I can’t find anything about cancelling in the diff. Which parts did you actually try? Does a 60k-row export finish now?',
+          },
+        ],
+      },
+      {
+        kind: 'comment',
+        from: alex,
+        when: 'commented the next day',
+        delay: 1400,
+        parts: [{ kind: 'p', text: 'Good catch, not sure where that came from. Tests pass, I’ll try a big one and get back to you 🤔' }],
+      },
+      { kind: 'event', from: sam, text: 'requested changes', result: 'bad', delay: 1000 },
+    ] as Item[],
+    stats: [
+      ['Took to write', 'about 10 seconds'],
+      ['In review', '2 days and counting'],
+      ['Status', 'changes requested'],
+    ],
+  },
+  {
+    id: 'do',
+    label: 'Do',
+    items: [
+      {
+        kind: 'comment',
+        from: alex,
+        when: 'opened this pull request',
+        delay: 0,
+        parts: [
+          { kind: 'p', text: 'Exports stream in 5k-row chunks instead of building the whole file in memory first.' },
+          {
+            kind: 'flow',
+            lanes: [
+              {
+                label: 'Before',
+                steps: [{ text: 'Export' }, { text: 'Build whole file' }, { text: 'Times out at 30s', result: 'bad' }],
+              },
+              {
+                label: 'After',
+                steps: [{ text: 'Export' }, { text: 'Stream 5k rows' }, { text: 'Progress bar' }, { text: 'Done in 41s', result: 'good' }],
+              },
+            ],
+          },
+          { kind: 'h', text: 'Tried on staging' },
+          {
+            kind: 'table',
+            head: ['', 'Before', 'After'],
+            rows: [
+              ['60k-row export', 'times out', '41s'],
+              ['500-row export', '1s', '1s'],
+              ['Cancel halfway', 'works', 'works'],
+            ],
+          },
+          { kind: 'h', text: 'Merge danger' },
+          {
+            kind: 'p',
+            text: 'Low. Only the export endpoint changed. One open question: the progress text says “rows”, support might prefer “records”.',
+          },
+        ],
+      },
+      {
+        kind: 'comment',
+        from: sam,
+        when: 'commented 20 minutes later',
+        delay: 1500,
+        parts: [{ kind: 'p', text: 'The diagram made the diff easy to follow, and thanks for checking cancel. “Rows” is fine by me.' }],
+      },
+      { kind: 'event', from: sam, text: 'approved these changes', result: 'good', delay: 900 },
+      { kind: 'event', from: alex, text: 'merged this pull request', result: 'good', delay: 900, merge: true },
+    ] as Item[],
+    stats: [
+      ['Took to write', 'about 10 minutes'],
+      ['In review', '20 minutes'],
+      ['Status', 'merged'],
+    ],
+  },
+];
+---
+
+<figure class="pr" data-pr>
+  <div class="bar">
+    <span class="title"><span class="num">#482</span> {title}</span>
+    <div class="actions" role="group" aria-label="Choose a version of the pull request">
+      {scenes.map((s) => (
+        <button type="button" class:list={['pick', s.id]} data-pick={s.id} aria-pressed="false">
+          <span class="mark" aria-hidden="true">{s.id === 'dont' ? '✕' : '✓'}</span>
+          {s.label}
+        </button>
+      ))}
+      <button type="button" class="replay" data-replay aria-label="Replay pull request">↻</button>
+    </div>
+  </div>
+
+  {scenes.map((scene) => (
+    <section class="scene" data-scene={scene.id} aria-label={`${scene.label}: example pull request`}>
+      <h3 class="scene-title"><span class:list={['mark', scene.id]}>{scene.id === 'dont' ? '✕' : '✓'}</span> {scene.label}</h3>
+      <div class="window" data-window>
+        <ol class="timeline">
+          {scene.items.map((item) =>
+            item.kind === 'event' ? (
+              <li class:list={['item', 'event', item.result, { merged: item.merge }]} data-delay={item.delay}>
+                <span class="dot" aria-hidden="true">
+                  {item.merge ? (
+                    // GitHub's git-merge octicon (MIT).
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                      <path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z" />
+                    </svg>
+                  ) : item.result === 'good' ? '✓' : '✕'}
+                </span>
+                <p><b>{item.from.name}</b> {item.text}</p>
+              </li>
+            ) : (
+              <li class:list={['item', 'comment', item.from.tone, { wall: item.wall }]} data-delay={item.delay}>
+                <span class="avatar" aria-hidden="true">{item.from.initials}</span>
+                <div class="card">
+                  <p class="meta"><b>{item.from.name}</b> <span>{item.when}</span></p>
+                  <div class="body">
+                    {item.parts.map((p) =>
+                      p.kind === 'h' ? (
+                        <p class="h">{p.text}</p>
+                      ) : p.kind === 'ul' ? (
+                        <ul>{p.items.map((i) => <li>{i}</li>)}</ul>
+                      ) : p.kind === 'flow' ? (
+                        <div class="flow">
+                          {p.lanes.map((lane) => (
+                            <p class="lane">
+                              <span class="lane-label">{lane.label}</span>
+                              {lane.steps.map((s, i) => (
+                                <>
+                                  {i > 0 && <span class="arrow" aria-label="then">→</span>}
+                                  <span class:list={['step', s.result]}>{s.text}</span>
+                                </>
+                              ))}
+                            </p>
+                          ))}
+                        </div>
+                      ) : p.kind === 'table' ? (
+                        <table class="evidence">
+                          <thead><tr>{p.head.map((h) => <th>{h}</th>)}</tr></thead>
+                          <tbody>{p.rows.map((r) => <tr>{r.map((c, i) => (i === 0 ? <th>{c}</th> : <td>{c}</td>))}</tr>)}</tbody>
+                        </table>
+                      ) : (
+                        <p>{p.text}</p>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </li>
+            ),
+          )}
+        </ol>
+      </div>
+      <dl class="stats" data-stats>
+        {scene.stats.map(([k, v]) => (
+          <div>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  ))}
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .pr {
+    --author: light-dark(#0f7b6c, #4fc7b4);
+    --rev: light-dark(#b4561f, #f0a06a);
+    /* GitHub's merged purple. */
+    --merged: light-dark(#8250df, #a371f7);
+    /* Wider than the text column where there's room, never wider than the screen. */
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .title { font-weight: 600; }
+  .num { color: var(--muted); font-weight: 400; margin-right: 0.2rem; }
+  /* The buttons only do something once the script runs. */
+  .actions { display: none; gap: 0.4rem; }
+  .pr.js .actions { display: flex; }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out), background-color 150ms, border-color 150ms, color 150ms;
+  }
+  button:hover { background: var(--border); }
+  button:active { transform: scale(0.96); }
+  .pick.dont { --c: var(--danger); }
+  .pick.do { --c: var(--success); }
+  .pick .mark { color: var(--c); font-weight: 700; }
+  .pick[aria-pressed='true'] {
+    border-color: var(--c);
+    background: color-mix(in srgb, var(--c) 12%, var(--bg));
+  }
+  .replay { padding-inline: 0.6rem; }
+  /* Nudge towards the good version once the bad one has played out. */
+  .pick.nudge { animation: nudge 1.4s var(--ease-in-out) 2; }
+  @keyframes nudge {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent); }
+  }
+
+  .scene + .scene { border-top: 1px solid var(--border); }
+  .pr.js .scene + .scene { border-top: 0; }
+  .pr.js .scene:not(.active) { display: none; }
+  .scene-title { margin: 0; padding: 0.8rem 1rem 0; font-size: 0.95rem; }
+  .pr.js .scene-title { display: none; }
+  .scene-title .mark.dont { color: var(--danger); }
+  .scene-title .mark.do { color: var(--success); }
+
+  .window { background: var(--bg); }
+  .pr.js .window {
+    height: 25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+  }
+  /* Only the script scrolls while a version plays. The reader gets the scrollbar back once it ends. */
+  .pr.js .window.playing { overflow-y: hidden; }
+  /* A vertical line joins the timeline, like a PR's conversation tab. */
+  .timeline {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 1rem 1rem 1.25rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    bottom: 1.25rem;
+    left: calc(1rem + 1.05rem);
+    width: 2px;
+    background: var(--border);
+  }
+  .item { position: relative; }
+  .item + .item { margin-top: 1rem; }
+
+  .comment {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.75rem;
+  }
+  .comment.author { --who: var(--author); }
+  .comment.rev { --who: var(--rev); }
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 999px;
+    background: var(--who);
+    color: var(--surface);
+    font-weight: 700;
+  }
+  .card {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .meta {
+    margin: 0;
+    padding: 0.45rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--who) 7%, var(--surface));
+    font-size: 0.85rem;
+  }
+  .meta span { color: var(--muted); }
+  .body { padding: 0.65rem 0.8rem; line-height: 1.5; }
+  .body p { margin: 0 0 0.45rem; }
+  .body p:last-child { margin-bottom: 0; }
+  .body .h { font-weight: 700; font-size: 0.95rem; margin-top: 0.8rem; }
+  .body .h:first-child { margin-top: 0; }
+  .wall .body { font-size: 0.88rem; }
+  .wall ul { margin: 0 0 0.45rem; padding-left: 1.2rem; }
+  .wall li { margin: 0.1rem 0; }
+  .pr.js .comment.wall.in { animation: paste 380ms var(--ease-out); }
+
+  /* The summary diagram: what happens on export, before and after the change. */
+  .flow {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0.6rem 0 0.2rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    font-size: 0.82rem;
+  }
+  .body .lane {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+  }
+  .lane-label {
+    width: 3.4rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .step {
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .step.bad, .step.good {
+    border-color: var(--c);
+    background: color-mix(in srgb, var(--c) 12%, var(--surface));
+    font-weight: 600;
+  }
+  .step.bad { --c: var(--danger); }
+  .step.good { --c: var(--success); }
+  .arrow { color: var(--muted); }
+
+  .evidence {
+    border-collapse: collapse;
+    margin: 0.3rem 0 0.2rem;
+    font-size: 0.85rem;
+  }
+  .evidence th, .evidence td {
+    padding: 0.25rem 1.2rem 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .evidence thead th { color: var(--muted); font-size: 0.72rem; font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; }
+  .evidence tbody th { font-weight: 400; }
+  .evidence td { font-family: var(--font-mono); font-size: 0.8rem; }
+  .evidence tr:last-child > * { border-bottom: 0; }
+
+  .event {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .event p { margin: 0; }
+  .event b { color: var(--fg); }
+  .event.bad { --c: var(--danger); }
+  .event.good { --c: var(--success); }
+  .event.merged { --c: var(--merged); }
+  .dot {
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--c);
+    color: var(--surface);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .pr.js .item { display: none; }
+  .pr.js .item.in { display: grid; animation: arrive 320ms var(--ease-out); }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--border);
+    transition: opacity 400ms var(--ease-out), translate 400ms var(--ease-out);
+  }
+  .pr.js .stats:not(.in) { opacity: 0; translate: 0 0.3rem; }
+  .stats dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stats dd { margin: 0.1rem 0 0; font-weight: 600; }
+  [data-scene='dont'] .stats div:last-child dd { color: var(--danger); }
+  [data-scene='do'] .stats div:last-child dd { color: var(--merged); }
+
+  figcaption { padding: 0 1rem 0.9rem; color: var(--muted); font-size: 0.88rem; }
+  figcaption:empty { display: none; }
+
+  @media (max-width: 34rem) {
+    .pr.js .window { height: 22rem; }
+    .timeline { padding-inline: 0.6rem; }
+    .timeline::before { left: calc(0.6rem + 1.05rem); }
+    .lane-label { width: 100%; }
+    .stats { grid-template-columns: 1fr; }
+  }
+
+  @keyframes arrive { from { opacity: 0; translate: 0 0.5rem; } }
+  @keyframes paste { from { opacity: 0; scale: 0.98; } }
+  @media (prefers-reduced-motion: reduce) {
+    .pr * { animation: none !important; }
+  }
+</style>
+
+<script>
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-pr]')) {
+    root.classList.add('js');
+    const picks = [...root.querySelectorAll<HTMLButtonElement>('[data-pick]')];
+    const scenes = new Map(
+      [...root.querySelectorAll<HTMLElement>('[data-scene]')].map((el) => [el.dataset.scene!, el]),
+    );
+    let run = 0;
+    let current = 'dont';
+
+    // Waits, but gives up as soon as another run has started, so a replay mid-way cancels cleanly.
+    const wait = (ms: number, token: number) =>
+      new Promise<boolean>((r) => setTimeout(() => r(token === run), reduceMotion.matches ? 0 : ms));
+
+    // Scrolls the window down over `ms`, slowly enough to feel like someone trying to read it.
+    const scrollTo = (win: HTMLElement, ms: number, token: number) =>
+      new Promise<void>((resolve) => {
+        const from = win.scrollTop;
+        const to = win.scrollHeight - win.clientHeight;
+        if (reduceMotion.matches || to <= from) {
+          win.scrollTop = to;
+          return resolve();
+        }
+        const start = performance.now();
+        const step = (now: number) => {
+          if (token !== run) return resolve();
+          const t = Math.min(1, (now - start) / ms);
+          win.scrollTop = from + (to - from) * (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+
+    // Switches to a version and resets it to just the description.
+    function show(id: string) {
+      current = id;
+      for (const b of picks) {
+        b.setAttribute('aria-pressed', String(b.dataset.pick === id));
+        b.classList.remove('nudge');
+      }
+      for (const [key, el] of scenes) el.classList.toggle('active', key === id);
+      for (const w of root.querySelectorAll<HTMLElement>('[data-window]')) w.classList.remove('playing');
+      const scene = scenes.get(id)!;
+      const items = [...scene.querySelectorAll<HTMLElement>('.item')];
+      items.forEach((m, i) => m.classList.toggle('in', i === 0));
+      scene.querySelector<HTMLElement>('[data-stats]')!.classList.remove('in');
+      scene.querySelector<HTMLElement>('[data-window]')!.scrollTop = 0;
+      return scene;
+    }
+
+    async function play(id: string) {
+      const token = ++run;
+      const scene = show(id);
+      const win = scene.querySelector<HTMLElement>('[data-window]')!;
+      const items = [...scene.querySelectorAll<HTMLElement>('.item')];
+      const stats = scene.querySelector<HTMLElement>('[data-stats]')!;
+      win.classList.add('playing');
+
+      // The reviewer reads the description first. The wall takes a while; the short one doesn't.
+      if (items[0].classList.contains('wall')) {
+        if (!(await wait(900, token))) return;
+        await scrollTo(win, 6500, token);
+      }
+      for (const item of items.slice(1)) {
+        if (!(await wait(Number(item.dataset.delay), token))) return;
+        item.classList.add('in');
+        await scrollTo(win, 400, token);
+        if (token !== run) return;
+      }
+      win.classList.remove('playing');
+      if (!(await wait(500, token))) return;
+      stats.classList.add('in');
+      if (id === 'dont') picks.find((b) => b.dataset.pick === 'do')?.classList.add('nudge');
+    }
+
+    for (const b of picks) b.addEventListener('click', () => play(b.dataset.pick!));
+    root.querySelector('[data-replay]')!.addEventListener('click', () => play(current));
+
+    // Show the first version straight away, and start playing it once it's on screen.
+    show('dont');
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          seen.disconnect();
+          play(current);
+        }
+      },
+      { threshold: 0.4 },
+    );
+    seen.observe(root);
+  }
+</script>

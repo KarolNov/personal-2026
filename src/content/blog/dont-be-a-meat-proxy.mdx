@@ -1,5 +1,5 @@
 ---
-title: Don't be a meat proxy
+title: Show, don't prompt
 description: AI made writing cheap, but reading still costs the same. Why pasting LLM output into a thread hurts your team, why showing beats telling, and how to use AI to make the showing cheap.
 pubDate: 2026-11-08
 tags: [ai, communication, async]
@@ -7,6 +7,7 @@ draft: true
 ---
 
 import MeatProxyChat from '../../components/ai/MeatProxyChat.astro';
+import ShowDontTellPR from '../../components/ai/ShowDontTellPR.astro';
 
 You've probably seen this happen. Someone asks a question in a thread. A colleague pastes it into an LLM, copies
 the answer and posts it back: eight paragraphs, three headings, a bulleted list of "key considerations" and a
@@ -36,14 +37,13 @@ AI took that cost away from the writer and none of it away from the reader. A wa
 make and as long as ever to read, understand and check. So the cost hasn't gone. It has moved from the person
 writing to every person reading, and there are more readers than writers.
 
-It's the same trap as shipping code faster than anyone can review it. Arron Woods wrote about the
-engineering side of this in [More than writers of code](https://www.arronwoods.com/blog/2026/01-more-than-writers-of-code):
-code should be proven, and something you'd be proud of, before it goes to someone else for review, however
-quickly it was produced. The same holds for words. Volume isn't progress if someone else has to do the thinking you
-skipped.
-
-> **TODO:** check the wording against Arron's post (Pride Test, False Velocity, Author's Checklist) and decide
-> how much of it to name here. I couldn't load the page while drafting, so the summary above is from your notes.
+It's the same trap as shipping code faster than anyone can review it, and that's where we hit it first. Arron
+Woods, VP at Ceros, wrote about how it showed up in our engineering team and what we did about it in
+[More than writers of code](https://www.arronwoods.com/blog/2026/01-more-than-writers-of-code). Most of us had
+stopped writing code by hand, and yet we weren't moving much faster: getting changes ready for production, and
+through review, had become the bottleneck. He called it False Velocity, mistaking code churn for progress, and
+gave us the Pride Test: before you ask for a review, would you sleep soundly if the change merged straight to main?
+The same holds for words. Volume isn't progress if someone else has to do the thinking you skipped.
 
 ## What worked for us: show, don't tell
 
@@ -55,8 +55,17 @@ actually tried, not what you say you tried. They hear how sure you are: "this pa
 happy with yet". They see your judgment in what you choose to show and what you skip. And it's very hard to fake
 with AI, because the thing you're showing is your own understanding.
 
-> **TODO:** add one or two real examples from the team. For example a PR whose Loom answered the review before
-> anyone asked, or a bug report where a 30-second recording replaced a long thread.
+It doesn't have to be a video, though. On the engineering side, other formats often work better: a walkthrough
+of the code changes in the order they make sense, an interactive artifact the reviewer can poke at, or just a
+simple diagram of what happens before and after. What they have in common is that they show the reviewer how
+the change works and what you checked, instead of asking them to take your word for it.
+
+Here's Alex's fix for those slow exports going up for review, described once and shown once:
+
+<ShowDontTellPR>
+  Same change, two descriptions. The first claims things nobody checked, so Sam has to work out which parts are
+  true. The second shows how the change works, what Alex tried and what could go wrong.
+</ShowDontTellPR>
 
 ## The catch: showing is expensive
 

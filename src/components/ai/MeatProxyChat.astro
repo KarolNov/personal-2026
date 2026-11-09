@@ -208,7 +208,10 @@ const readTime = (n: number) => {
   .chat {
     --pm: light-dark(#7a4bd1, #b596f2);
     --eng: light-dark(#0f7b6c, #4fc7b4);
-    margin: 2.25rem 0;
+    /* Wider than the text column where there's room, never wider than the screen. */
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) + 4px);
     background: var(--surface);
@@ -276,7 +279,10 @@ const readTime = (n: number) => {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
+    scrollbar-gutter: stable;
   }
+  /* Only the script scrolls while a version plays. The reader gets the scrollbar back once it ends. */
+  .chat.js .window.playing { overflow-y: hidden; }
   .thread { list-style: none; margin: 0; padding: 0.75rem 0.5rem 1rem; }
 
   .msg, .typing {
@@ -428,6 +434,7 @@ const readTime = (n: number) => {
         b.classList.remove('nudge');
       }
       for (const [key, el] of scenes) el.classList.toggle('active', key === id);
+      for (const w of root.querySelectorAll<HTMLElement>('[data-window]')) w.classList.remove('playing');
       const scene = scenes.get(id)!;
       const msgs = [...scene.querySelectorAll<HTMLElement>('.msg')];
       msgs.forEach((m, i) => m.classList.toggle('in', i === 0));
@@ -444,6 +451,7 @@ const readTime = (n: number) => {
       const msgs = [...scene.querySelectorAll<HTMLElement>('.msg')];
       const typing = scene.querySelector<HTMLElement>('[data-typing-row]')!;
       const stats = scene.querySelector<HTMLElement>('[data-stats]')!;
+      win.classList.add('playing');
 
       for (const [i, msg] of msgs.entries()) {
         if (i === 0) continue;
@@ -470,6 +478,7 @@ const readTime = (n: number) => {
         }
         if (token !== run) return;
       }
+      win.classList.remove('playing');
       if (!(await wait(500, token))) return;
       stats.classList.add('in');
       if (id === 'dont') picks.find((b) => b.dataset.pick === 'do')?.classList.add('nudge');
