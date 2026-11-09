@@ -80,17 +80,46 @@ const beeps = ['bweep?', 'brrt-brrt!', 'wooo-eep', 'bip bop', 'dwee-oo…', 'bzz
   const bubble = droid?.querySelector<HTMLElement>('.bubble');
   if (droid && bubble) {
     const beeps: string[] = JSON.parse(droid.dataset.beeps ?? '[]');
+    const say = (text: string) => {
+      bubble.textContent = text;
+      // Restart the hop and bubble pop even on rapid clicks.
+      droid.classList.remove('hop');
+      void droid.offsetWidth;
+      droid.classList.add('hop');
+    };
+
     let last = 0;
     droid.addEventListener('click', () => {
       let next = last;
       while (next === last && beeps.length > 1) next = Math.floor(Math.random() * beeps.length);
       last = next;
-      bubble.textContent = beeps[next];
-      // Restart the hop and bubble pop even on rapid clicks.
-      droid.classList.remove('hop');
-      void droid.offsetWidth;
-      droid.classList.add('hop');
+      say(beeps[next]);
     });
+
+    // The droid watches the cursor anywhere on the page, and startles when it gets close.
+    // After a moment without movement it goes back to looking around on its own.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const clamp = (n: number, max: number) => Math.max(-max, Math.min(max, n));
+      let idle = 0;
+      let near = false;
+      window.addEventListener('pointermove', (e) => {
+        const box = droid.getBoundingClientRect();
+        const dx = e.clientX - (box.left + box.width / 2);
+        const dy = e.clientY - (box.top + box.height * 0.3);
+        droid.style.setProperty('--look-x', `${clamp(dx / 8, 14)}px`);
+        droid.style.setProperty('--lens-x', `${clamp(dx / 40, 3)}px`);
+        droid.style.setProperty('--lens-y', `${clamp(dy / 40, 2)}px`);
+        droid.style.setProperty('--lean', `${clamp(dx / 40, 6)}deg`);
+        droid.classList.add('tracking');
+        clearTimeout(idle);
+        idle = window.setTimeout(() => droid.classList.remove('tracking'), 2500);
+
+        const distance = Math.hypot(dx, dy);
+        if (!near && distance < 90) say('!?');
+        if (distance < 90) near = true;
+        else if (distance > 180) near = false;
+      });
+    }
   }
 </script>
 
@@ -170,7 +199,19 @@ const beeps = ['bweep?', 'brrt-brrt!', 'wooo-eep', 'bip bop', 'dwee-oo…', 'bzz
     cursor: pointer;
     animation: roll-in 1.4s var(--ease-out) 300ms backwards;
   }
-  .droid svg { display: block; position: relative; z-index: 1; }
+  .droid svg {
+    display: block;
+    position: relative;
+    z-index: 1;
+    transform-origin: 50% 100%;
+    transition: rotate 300ms var(--ease-out);
+  }
+
+  /* Following the cursor (see the script): lean toward it, turn the dome, and aim the lens.
+     `rotate` and `translate` stay separate from the transforms the idle animations use. */
+  .droid.tracking svg { rotate: var(--lean); }
+  .droid.tracking .face { animation: none; transform: translateX(var(--look-x)); transition: transform 200ms var(--ease-out); }
+  .droid.tracking .lens { translate: var(--lens-x) var(--lens-y); }
 
   @keyframes roll-in { from { transform: translateX(70cqw); } }
 
