@@ -98,6 +98,17 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 
 @keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
 
+/* Into a post from a list the page nudges in from the right; back out, from the left (BaseHead
+   sets data-nav). The slide replaces the stagger, which would move content diagonally. */
+:root[data-nav='forward'] { --nav-x: 1; }
+:root[data-nav='back'] { --nav-x: -1; }
+:root[data-nav]::view-transition-old(page) { animation: 120ms var(--ease-out) both nav-out; }
+:root[data-nav]::view-transition-new(page) { animation: 250ms var(--ease-out) 40ms both nav-in; }
+:root[data-nav] :is(.rise, .stagger > *) { animation: none; }
+
+@keyframes nav-out { to { opacity: 0; transform: translateX(calc(var(--nav-x) * -16px)); } }
+@keyframes nav-in { from { opacity: 0; transform: translateX(calc(var(--nav-x) * 24px)); } }
+
 /* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
 .theme-transition * { view-transition-name: none !important; }
 .theme-transition::view-transition { pointer-events: none; }

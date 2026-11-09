@@ -28,6 +28,20 @@ const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
     const theme = localStorage.getItem('theme');
     if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   } catch {}
+
+  // List ↔ post navigations slide sideways instead of fading (see global.css). Direction comes
+  // from the URLs, so history back/forward slides the same way as clicking.
+  addEventListener('pagereveal', (e) => {
+    const root = document.documentElement;
+    delete root.dataset.nav;
+    const from = e.viewTransition && window.navigation?.activation?.from?.url;
+    if (!from) return;
+    const isPost = (path) => /^\/blog\/[^/]+\/?$/.test(path);
+    const isList = (path) => path === '/' || path === '/blog/';
+    const prev = new URL(from).pathname;
+    if (isList(prev) && isPost(location.pathname)) root.dataset.nav = 'forward';
+    else if (isPost(prev) && isList(location.pathname)) root.dataset.nav = 'back';
+  });
 </script>
 <Font cssVariable="--font-geist" preload />
 <Font cssVariable="--font-geist-mono" />
