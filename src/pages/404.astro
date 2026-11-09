@@ -1,8 +1,254 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Fixed positions so the starfield is the same on every build (x%, y%, size px, twinkle delay s).
+const stars = [
+  [6, 12, 2, 0], [14, 68, 1, 1.2], [21, 30, 2, 2.4], [28, 84, 1, 0.6], [35, 14, 1, 1.8],
+  [42, 52, 2, 3.1], [49, 22, 1, 0.3], [56, 76, 1, 2.2], [63, 9, 2, 1.4], [70, 40, 1, 2.8],
+  [77, 70, 2, 0.9], [84, 18, 1, 1.6], [91, 56, 2, 2.6], [96, 88, 1, 0.2], [10, 44, 1, 3.4],
+  [32, 60, 1, 1.1], [60, 92, 1, 2.0], [88, 34, 1, 0.7], [18, 92, 2, 1.9], [74, 6, 1, 3.0],
+];
+
+const beeps = ['bweep?', 'brrt-brrt!', 'wooo-eep', 'bip bop', 'dwee-oo…', 'bzzt!'];
 ---
 
-<BaseLayout title="Not found" description="Page not found.">
-  <h1>404</h1>
-  <p class="muted">That page doesn't exist. <a href="/">Go home</a>.</p>
+<BaseLayout title="Not found" description="This isn't the page you're looking for.">
+  <p class="eyebrow">404</p>
+  <h1>This isn't the page you're looking for.</h1>
+
+  <div class="scene" aria-hidden="true">
+    {stars.map(([x, y, s, d]) => (
+      <span class="star" style={`left:${x}%;top:${y}%;--s:${s}px;--d:${d}s`} />
+    ))}
+    <span class="shooting-star" />
+
+    <span class="hand">👋</span>
+
+    <button class="droid" type="button" tabindex="-1" data-beeps={JSON.stringify(beeps)}>
+      <span class="bubble">bweep?</span>
+      <svg viewBox="0 0 120 150" width="120" height="150">
+        <!-- legs -->
+        <g class="legs">
+          <path d="M14 70 h14 v58 l6 12 h-26 l6 -12 z" fill="#d9dde3" stroke="#8a929c" stroke-width="2" stroke-linejoin="round" />
+          <path d="M92 70 h14 v58 l6 12 h-26 l6 -12 z" fill="#d9dde3" stroke="#8a929c" stroke-width="2" stroke-linejoin="round" />
+        </g>
+        <g class="body">
+          <!-- torso -->
+          <rect x="26" y="58" width="68" height="72" rx="8" fill="#f1f3f6" stroke="#8a929c" stroke-width="2" />
+          <rect x="34" y="68" width="22" height="10" rx="2" fill="#c41e3a" />
+          <rect x="62" y="68" width="24" height="10" rx="2" fill="#c41e3a" />
+          <rect x="34" y="84" width="52" height="4" rx="2" fill="#b8bec7" />
+          <rect x="34" y="94" width="14" height="24" rx="2" fill="#c41e3a" />
+          <rect x="52" y="94" width="34" height="8" rx="2" fill="#b8bec7" />
+          <rect x="52" y="106" width="34" height="12" rx="2" fill="#c41e3a" opacity="0.85" />
+          <!-- dome -->
+          <g class="dome">
+            <path d="M24 60 a36 36 0 0 1 72 0 z" fill="#e6e9ee" stroke="#8a929c" stroke-width="2" stroke-linejoin="round" />
+            <clipPath id="dome-clip"><path d="M24 60 a36 36 0 0 1 72 0 z" /></clipPath>
+            <g clip-path="url(#dome-clip)">
+              <g class="face">
+                <rect x="28" y="40" width="64" height="8" fill="#c41e3a" />
+                <circle class="eye" cx="60" cy="38" r="9" fill="#1c1b19" />
+                <circle class="lens" cx="62" cy="36" r="3" fill="#ff6b7d" />
+                <rect x="40" y="50" width="10" height="6" rx="1" fill="#c41e3a" />
+                <rect x="72" y="50" width="10" height="6" rx="1" fill="#c41e3a" />
+                <circle class="light" cx="80" cy="34" r="2.5" fill="#47cd89" />
+              </g>
+            </g>
+          </g>
+        </g>
+      </svg>
+      <span class="shadow" />
+    </button>
+  </div>
+
+  <p>
+    <code class="path">this URL</code> isn't here — it may be hiding in a galaxy far, far away.
+    You can go about your business.
+  </p>
+  <p class="actions">
+    <a class="button" href="/">Move along</a>
+    <a class="button secondary" href="/blog">Read the blog</a>
+  </p>
 </BaseLayout>
+
+<script>
+  const path = document.querySelector<HTMLElement>('.path');
+  if (path && !/^\/404(\.html)?\/?$/.test(location.pathname)) path.textContent = location.pathname;
+
+  const droid = document.querySelector<HTMLButtonElement>('.droid');
+  const bubble = droid?.querySelector<HTMLElement>('.bubble');
+  if (droid && bubble) {
+    const beeps: string[] = JSON.parse(droid.dataset.beeps ?? '[]');
+    let last = 0;
+    droid.addEventListener('click', () => {
+      let next = last;
+      while (next === last && beeps.length > 1) next = Math.floor(Math.random() * beeps.length);
+      last = next;
+      bubble.textContent = beeps[next];
+      // Restart the hop and bubble pop even on rapid clicks.
+      droid.classList.remove('hop');
+      void droid.offsetWidth;
+      droid.classList.add('hop');
+    });
+  }
+</script>
+
+<style>
+  .eyebrow {
+    margin: 0;
+    font: 700 0.85rem/1 var(--font-mono);
+    letter-spacing: 0.2em;
+    color: var(--accent);
+  }
+
+  /* Space is dark in both themes. */
+  .scene {
+    position: relative;
+    height: 15rem;
+    margin: 1.5rem 0;
+    overflow: hidden;
+    border-radius: var(--radius);
+    background: radial-gradient(ellipse at 70% 120%, #3a1420 0%, #120d14 55%, #07060a 100%);
+  }
+
+  .star {
+    position: absolute;
+    width: var(--s);
+    height: var(--s);
+    border-radius: 50%;
+    background: #fff;
+    animation: twinkle 3.6s ease-in-out infinite;
+    animation-delay: var(--d);
+  }
+  @keyframes twinkle { 50% { opacity: 0.25; } }
+
+  .shooting-star {
+    position: absolute;
+    top: 18%;
+    left: -20%;
+    width: 80px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #fff);
+    transform: rotate(14deg);
+    opacity: 0;
+    animation: shoot 7s ease-in 2s infinite;
+  }
+  @keyframes shoot {
+    0% { opacity: 0; translate: 0 0; }
+    3% { opacity: 1; }
+    12% { opacity: 0; translate: 140cqw 34cqw; }
+    100% { opacity: 0; translate: 140cqw 34cqw; }
+  }
+  .scene { container-type: size; }
+
+  /* The Jedi mind trick: a slow wave in from the side. */
+  .hand {
+    position: absolute;
+    left: 12%;
+    top: 34%;
+    font-size: 2.6rem;
+    transform-origin: 70% 90%;
+    animation: wave 4s var(--ease-in-out) infinite;
+    filter: drop-shadow(0 0 12px rgb(255 255 255 / 0.35));
+  }
+  @keyframes wave {
+    0%, 100% { transform: translateX(0) rotate(-12deg); }
+    25% { transform: translateX(14px) rotate(14deg); }
+    50% { transform: translateX(0) rotate(-12deg); }
+    75% { transform: translateX(14px) rotate(14deg); }
+  }
+
+  .droid {
+    position: absolute;
+    left: 50%;
+    bottom: 0.75rem;
+    translate: -10% 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    animation: roll-in 1.4s var(--ease-out) 300ms backwards;
+  }
+  .droid svg { display: block; position: relative; z-index: 1; }
+
+  @keyframes roll-in { from { transform: translateX(70cqw); } }
+
+  .droid .body { transform-origin: 60px 140px; animation: rock 2.4s ease-in-out infinite; }
+  @keyframes rock {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+
+  /* The dome "turns" by sliding its face side to side under the clip. */
+  .droid .face { animation: look 5s var(--ease-in-out) infinite; }
+  @keyframes look {
+    0%, 15% { transform: translateX(0); }
+    25%, 45% { transform: translateX(-14px); }
+    55%, 75% { transform: translateX(14px); }
+    85%, 100% { transform: translateX(0); }
+  }
+
+  .droid .eye, .droid .lens { transform-box: fill-box; transform-origin: center; animation: blink 4.2s infinite; }
+  @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+
+  .droid .light { animation: pulse 1.1s steps(2) infinite; }
+  @keyframes pulse { 50% { fill: #c41e3a; } }
+
+  .shadow {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: -4px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.5);
+    filter: blur(3px);
+  }
+
+  .bubble {
+    position: absolute;
+    z-index: 2;
+    bottom: 100%;
+    left: 70%;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px 999px 999px 4px;
+    background: #fff;
+    color: #1c1b19;
+    font: 600 0.8rem/1.4 var(--font-mono);
+    white-space: nowrap;
+    animation: chirp 5s var(--ease-out) 1.8s infinite backwards;
+  }
+  @keyframes chirp {
+    0% { opacity: 0; transform: scale(0.6) translateY(6px); }
+    6%, 40% { opacity: 1; transform: none; }
+    48%, 100% { opacity: 0; transform: translateY(-4px); }
+  }
+
+  /* On the svg, not the button, so the button's roll-in never replays. */
+  .droid.hop svg { animation: hop 420ms var(--ease-out); }
+  /* Its own keyframes: reusing `chirp` would only retime the running animation, not restart it. */
+  .droid.hop .bubble { animation: pop 2.4s var(--ease-out) both; }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(0.6) translateY(6px); }
+    8%, 80% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-4px); }
+  }
+  @keyframes hop {
+    0%, 100% { transform: translateY(0); }
+    35% { transform: translateY(-18px) rotate(-4deg); }
+    70% { transform: translateY(0) rotate(2deg); }
+  }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+  @media (max-width: 30rem) {
+    .hand { left: 6%; font-size: 2.1rem; }
+    .droid { translate: -30% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene *, .scene .droid * { animation: none !important; }
+    .bubble { opacity: 1; }
+  }
+</style>
