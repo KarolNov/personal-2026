@@ -9,6 +9,7 @@ draft: true
 import MeatProxyChat from '../../components/ai/MeatProxyChat.astro';
 import ShowDontTellPR from '../../components/ai/ShowDontTellPR.astro';
 import Video from '../../components/Video.astro';
+import Checklist from '../../components/Checklist.astro';
 
 You've probably seen this happen. Someone asks a question in a thread. A colleague pastes it into an LLM, copies
 the answer and posts it back: eight paragraphs, three headings, a bulleted list of "key considerations" and a
@@ -122,12 +123,18 @@ have time left for the part only you can do.
 
 A short checklist I now run through before posting anything AI helped with:
 
-- **Did I add my own judgment?** If I removed everything the AI wrote, would anything of mine be left?
-- **Did I check it?** Do I know which parts I verified and which I'm taking on trust, and have I said so?
-- **Can I show it instead of describing it?** A screenshot, a recording, a link to the running thing.
-- **Is it as short as it can be?** The reader's time is the expensive part now.
-- **Would I be happy if they asked me about it live?** If I'd have to go and read my own message first, it isn't
-  ready.
+<Checklist
+  items={[
+    ['Did I add my own judgment?', 'If I removed everything the AI wrote, would anything of mine be left?'],
+    ['Did I check it?', 'Do I know which parts I verified and which I’m taking on trust, and have I said so?'],
+    ['Can I show it instead of describing it?', 'A screenshot, a recording, a link to the running thing.'],
+    ['Is it as short as it can be?', 'The reader’s time is the expensive part now.'],
+    [
+      'Would I be happy if they asked me about it live?',
+      'If I’d have to go and read my own message first, it isn’t ready.',
+    ],
+  ]}
+/>
 
 None of this is new. Good teams worked this way before AI. What changed is that skipping it got much easier, and
 the people paying for it are everyone else.
