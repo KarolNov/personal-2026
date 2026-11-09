@@ -2,7 +2,7 @@
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
-import { formatDate, titleTransitionName } from '../lib/posts';
+import { formatDate } from '../lib/posts';
 
 type Props = CollectionEntry<'blog'>['data'] & { id: string };
 
@@ -16,14 +16,14 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
         <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
         {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time></>}
       </p>
-      <h1 class="post-title" style={{ viewTransitionName: titleTransitionName(id) }}>{title}</h1>
+      <h1 class="rise" style="--i: 1">{title}</h1>
     </header>
-    {heroImage && <Image class="rise" style="--i: 1" src={heroImage} alt="" width={1200} loading="eager" />}
-    <div class="prose rise" style="--i: 1">
+    {heroImage && <Image class="rise" style="--i: 2" src={heroImage} alt="" width={1200} loading="eager" />}
+    <div class="prose rise" style="--i: 2">
       <slot />
     </div>
   </article>
-  <p class="rise" style="--i: 2"><a href="/blog/">← All posts</a></p>
+  <p class="rise" style="--i: 3"><a href="/blog/">← All posts</a></p>
 </BaseLayout>
 
 <style>
