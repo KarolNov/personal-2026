@@ -36,12 +36,15 @@ const { items } = Astro.props;
     accent-color: var(--accent);
     cursor: pointer;
   }
+  /* The line is only added once checked: an invisible one would show up when the text is selected. It still
+     fades in, from the transparent colour. */
   span {
-    text-decoration: line-through transparent;
+    text-decoration-color: transparent;
     transition: color 200ms var(--ease-out), text-decoration-color 200ms var(--ease-out);
   }
   input:checked + span {
     color: var(--muted);
+    text-decoration-line: line-through;
     text-decoration-color: currentColor;
   }
 </style>
