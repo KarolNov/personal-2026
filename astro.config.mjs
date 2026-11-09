@@ -17,6 +17,11 @@ export default defineConfig({
   // Sessions are unused; disabling them avoids provisioning a KV namespace.
   session: false,
   integrations: [mdx(), sitemap()],
+  vite: {
+    // The adapter pre-bundles every page's imports for workerd in dev, and resvg's native binary
+    // can't be bundled. The share cards only ever render in Node (see prerenderEnvironment).
+    optimizeDeps: { exclude: ['@resvg/resvg-js'] },
+  },
   // Downloaded at build time and served from the site itself. latin-ext covers Polish and Croatian.
   fonts: [
     {
