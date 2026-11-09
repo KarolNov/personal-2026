@@ -146,8 +146,23 @@ export function initScrollBall() {
     // headed for only loses out to one that's clearly nearer, so it doesn't flick between two.
     let restPick: HTMLElement | null = null;
     let restY = 0;
+    // Which way the page last scrolled: 1 down, -1 up.
+    let scrollDir = 0;
     const NUDGE_PX = 16;
     const SWITCH_PX = 48;
+    // At rest the ball only settles on a heading this close to the reading line (as a share of the
+    // screen); one further off would send it dashing across the screen to get there.
+    const REACH = 0.25;
+
+    // The stretch of screen the ball stays within while riding the track, in main's coordinates.
+    // Between stops its path starts at the heading it left, which on a phone has usually scrolled
+    // off the top by then; held within this, the ball waits at the edge instead of vanishing and
+    // then shooting back in.
+    function band() {
+      const top = -main!.getBoundingClientRect().top;
+      const margin = Math.max(dot * 2, innerHeight * 0.06);
+      return [top + margin, top + innerHeight - margin - dot] as const;
+    }
 
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
@@ -180,7 +195,13 @@ export function initScrollBall() {
         const at = centre(el) + main!.getBoundingClientRect().top;
         return at > 0 && at < innerHeight;
       };
-      const options = [prev, upcoming].filter(inView);
+      const options = [prev, upcoming].filter((el) => inView(el) && Math.abs(centre(el) - y) < viewH * REACH);
+      // Scrolling on from a heading it settled on, towards that heading, it stays put: shrinking
+      // back into a ball only to stretch out under the same heading again a moment later flickers.
+      if (!resting && restPick) {
+        if ((restPick === upcoming && scrollDir > 0) || (restPick === prev && scrollDir < 0)) return shape(restPick);
+        restPick = null;
+      }
       if (resting && options.length) {
         const [a, b = a] = options;
         const nearer = Math.abs(centre(a) - y) <= Math.abs(centre(b) - y) ? a : b;
@@ -200,7 +221,8 @@ export function initScrollBall() {
       const next = stops[index + 1];
       const t = clamp((y - from.at) / (land(index + 1) - from.at), 0, 1);
       const at = from.y + (centre(next.el) - from.y) * t;
-      return { box: { x: trackX(), y: at - dot / 2, w: dot, h: dot }, line: null };
+      const [lo, hi] = band();
+      return { box: { x: trackX(), y: clamp(at - dot / 2, lo, hi), w: dot, h: dot }, line: null };
     }
 
     // A spring per property. Position is critically damped — a smooth ease-out with no overshoot,
@@ -379,6 +401,15 @@ export function initScrollBall() {
         if (Math.abs(aim[k] - pos[k]) > 0.1 || Math.abs(vel[k]) > 0.1) moving = true;
         else { pos[k] = aim[k]; vel[k] = 0; }
       }
+      // A round ball is kept on screen outright, as during a fast scroll the spring alone falls
+      // behind the page. One that shrank off a heading that has scrolled away shows up at the edge.
+      if (!line) {
+        const [lo, hi] = band();
+        if (pos.y < lo || pos.y > hi) {
+          pos.y = clamp(pos.y, lo, hi);
+          vel.y = 0;
+        }
+      }
 
       // Move on to the next stage once this one is (nearly) done.
       if (line && line !== goalLine) {
@@ -468,10 +499,10 @@ export function initScrollBall() {
       const now = performance.now();
       const instant = (Math.abs(scrollY - lastScroll.y) / Math.max(now - lastScroll.t, 1)) * 1000;
       speed = speed * 0.6 + instant * 0.4;
+      if (scrollY !== lastScroll.y) scrollDir = Math.sign(scrollY - lastScroll.y);
       lastScroll = { y: scrollY, t: now };
       if (resting && Math.abs(scrollY - restY) < NUDGE_PX) return update();
       resting = false;
-      restPick = null;
       clearTimeout(restTimer);
       // A short pause in scroll events means scrolling has stopped. scrollend says so sooner where
       // it fires, but it isn't relied on: iOS doesn't always deliver it, and a ball waiting for it
