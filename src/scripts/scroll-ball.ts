@@ -48,6 +48,19 @@ export function initScrollBall() {
     // The ball follows a reading line, in main's coordinates, normally this far down the viewport.
     const MIDDLE = 0.4;
 
+    // The viewport's height with the browser's toolbars hidden. On phones innerHeight grows and
+    // shrinks as the toolbar slides away and back mid-scroll, which would shift the reading line
+    // and every stop with it; this only changes on a real resize or rotation.
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position: absolute; top: 0; height: 100lvh; width: 0; visibility: hidden;';
+    let viewH = innerHeight;
+    const measureView = () => {
+      main!.appendChild(probe);
+      viewH = probe.offsetHeight || innerHeight;
+      probe.remove();
+    };
+    measureView();
+
     // A stop starts a little before its zone reaches the reading line, and holds until its
     // heading starts to leave the top of the screen, or the next stop starts, whichever is first.
     // It holds for at least 140px of scrolling, so a quick scroll still gives the ball time to get
@@ -55,7 +68,7 @@ export function initScrollBall() {
     const land = (i: number) => box(stops[i].zone).top - 48;
     function hold(i: number) {
       if (i === stops.length - 1) return Infinity;
-      const leaving = box(stops[i].el).top + innerHeight * MIDDLE;
+      const leaving = box(stops[i].el).top + viewH * MIDDLE;
       return Math.min(Math.max(leaving, box(stops[i].zone).top + 140), land(i + 1));
     }
 
@@ -63,11 +76,11 @@ export function initScrollBall() {
     // continuously instead of jumping. Towards the bottom some stops would never reach it before
     // the page runs out, so there it's bent to bring them in.
     function readingLine() {
-      const middle = innerHeight * MIDDLE;
+      const middle = viewH * MIDDLE;
       // main's position on the page, and the title's bottom where it sits in the viewport at the top.
       const mainTop = main!.getBoundingClientRect().top + scrollY;
       const top = mainTop + box(title!).top + box(title!).height + 4;
-      const maxScroll = document.documentElement.scrollHeight - innerHeight;
+      const maxScroll = document.documentElement.scrollHeight - viewH;
       const lineAt = (sy: number) =>
         sy + middle - mainTop - (middle > top ? (middle - top) * (1 - clamp(sy / (middle - top), 0, 1)) : 0);
       const end = box(touch!).top + box(touch!).height;
@@ -120,10 +133,16 @@ export function initScrollBall() {
     }
 
     // The ball's track hugs the outer edge of the left margin, well clear of the text. On phones
-    // that margin is just the screen edge, so the track runs down the text's left edge instead,
-    // where the underlines start, and the ball doesn't dart sideways at every stop.
-    const trackX = () =>
-      timeline!.getBoundingClientRect().left < dot * 2 ? box(list!).left : box(timeline!).left + 2;
+    // that margin is just the screen edge, so the track runs down the middle of the gutter
+    // between the screen edge and the text, and underlines start from it: the ball lands and
+    // leaves without darting sideways.
+    const narrow = () => timeline!.getBoundingClientRect().left < dot * 2;
+    const trackX = () => {
+      if (!narrow()) return box(timeline!).left + 2;
+      const text = box(list!).left;
+      const gutter = list!.getBoundingClientRect().left;
+      return Math.round(text - gutter / 2 - dot / 2);
+    };
 
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
@@ -137,7 +156,9 @@ export function initScrollBall() {
         const b = box(el);
         return el === touch
           ? { box: { x: b.left, y: b.top, w: b.width, h: b.height }, line: el }
-          : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
+          : narrow()
+            ? { box: { x: trackX(), y: b.top + b.height + 3, w: b.left + b.width - trackX(), h: dot * 0.6 }, line: el }
+            : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
       };
       const centre = (el: HTMLElement) => {
         const { box: b } = shape(el);
@@ -395,6 +416,7 @@ export function initScrollBall() {
     }
 
     function resize() {
+      measureView();
       sizeTrail();
       update();
     }
