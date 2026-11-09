@@ -93,6 +93,9 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 @view-transition { navigation: auto; }
 
 ::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
+/* Pages differ in height and scroll, so morphing between their boxes swept content in from far
+   above when leaving a scrolled page. The group snaps to the new page; only the fades move. */
+::view-transition-group(page) { animation: none; }
 ::view-transition-old(page) { animation: 150ms var(--ease-out) both page-out; }
 ::view-transition-new(page) { animation: none; }
 
