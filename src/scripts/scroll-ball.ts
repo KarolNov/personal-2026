@@ -133,20 +133,21 @@ export function initScrollBall() {
     }
 
     // The ball's track hugs the outer edge of the left margin, well clear of the text. On phones
-    // that margin is just the screen edge, so the track runs down the middle of the gutter
-    // between the screen edge and the text, and underlines start from it: the ball lands and
-    // leaves without darting sideways.
-    const narrow = () => timeline!.getBoundingClientRect().left < dot * 2;
-    const trackX = () => {
-      if (!narrow()) return box(timeline!).left + 2;
-      const text = box(list!).left;
-      const gutter = list!.getBoundingClientRect().left;
-      return Math.round(text - gutter / 2 - dot / 2);
-    };
+    // that margin is just the screen edge, so the track runs right beside the text instead, and
+    // the hop between it and an underline is only a ball's width.
+    const trackX = () =>
+      timeline!.getBoundingClientRect().left < dot * 2 ? box(list!).left - dot - 2 : box(timeline!).left + 2;
 
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
     let resting = true;
+    // The heading picked at rest, and the scroll position it was picked at. A phone's momentum
+    // scroll trails off in small nudges; those don't wake the ball, and a heading it's already
+    // headed for only loses out to one that's clearly nearer, so it doesn't flick between two.
+    let restPick: HTMLElement | null = null;
+    let restY = 0;
+    const NUDGE_PX = 16;
+    const SWITCH_PX = 48;
 
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
@@ -156,9 +157,7 @@ export function initScrollBall() {
         const b = box(el);
         return el === touch
           ? { box: { x: b.left, y: b.top, w: b.width, h: b.height }, line: el }
-          : narrow()
-            ? { box: { x: trackX(), y: b.top + b.height + 3, w: b.left + b.width - trackX(), h: dot * 0.6 }, line: el }
-            : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
+          : { box: { x: b.left, y: b.top + b.height + 3, w: b.width, h: dot * 0.6 }, line: el };
       };
       const centre = (el: HTMLElement) => {
         const { box: b } = shape(el);
@@ -175,7 +174,13 @@ export function initScrollBall() {
       // At rest between two stops, settle on whichever heading is nearer the reading line.
       const prev = index < 0 ? title! : stops[index].el;
       const upcoming = stops[index + 1].el;
-      if (resting) return shape(Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming);
+      if (resting) {
+        const nearer = Math.abs(centre(prev) - y) <= Math.abs(centre(upcoming) - y) ? prev : upcoming;
+        const other = nearer === prev ? upcoming : prev;
+        const keep = restPick === other && Math.abs(centre(other) - y) - Math.abs(centre(nearer) - y) < SWITCH_PX;
+        restPick = keep ? other : nearer;
+        return shape(restPick);
+      }
 
       // Otherwise ride down the track to the next stop. The ride is paced so the ball reaches the
       // next stop just as its zone reaches the reading line: it makes up the time it spent holding
@@ -456,16 +461,25 @@ export function initScrollBall() {
       const instant = (Math.abs(scrollY - lastScroll.y) / Math.max(now - lastScroll.t, 1)) * 1000;
       speed = speed * 0.6 + instant * 0.4;
       lastScroll = { y: scrollY, t: now };
+      if (resting && Math.abs(scrollY - restY) < NUDGE_PX) return update();
       resting = false;
+      restPick = null;
       clearTimeout(restTimer);
-      restTimer = window.setTimeout(() => {
-        speed = 0;
-        resting = true;
-        update();
-      }, 80);
+      // Where scrollend is supported it marks the end of momentum scrolling; otherwise a short
+      // pause in scroll events stands in for it.
+      if (!hasScrollEnd) restTimer = window.setTimeout(onRest, 80);
       update();
     }
 
+    function onRest() {
+      speed = 0;
+      resting = true;
+      restY = scrollY;
+      update();
+    }
+
+    const hasScrollEnd = 'onscrollend' in window;
+    if (hasScrollEnd) addEventListener('scrollend', onRest);
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(resize).observe(main);
