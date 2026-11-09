@@ -12,7 +12,7 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 <BaseLayout title={title} description={description} image={heroImage?.src ?? `/og/${id}.png`} stagger={false}>
   <article>
     <header>
-      <a class="back rise" href="/blog/"><span aria-hidden="true">←</span> All posts</a>
+      <p class="back rise"><a href="/blog/">← All posts</a></p>
       <p class="muted meta rise">
         <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
         {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time></>}
@@ -29,16 +29,7 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 
 <style>
   /* Long posts shouldn't need a scroll to the end to get back to the list. */
-  .back {
-    display: inline-block; margin-bottom: 1.25rem;
-    font-size: 0.9rem; color: var(--muted); text-decoration: none;
-    transition: color 150ms ease;
-  }
-  .back span { display: inline-block; transition: transform 150ms var(--ease-out); }
-  @media (hover: hover) and (pointer: fine) {
-    .back:hover { color: var(--fg); }
-    .back:hover span { transform: translateX(-2px); }
-  }
+  .back { margin: 0 0 1.25rem; }
   .meta { margin: 0; font-size: 0.95rem; }
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
