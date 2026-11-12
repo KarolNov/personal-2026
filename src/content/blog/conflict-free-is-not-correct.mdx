@@ -1,0 +1,269 @@
+---
+title: Conflict-free doesn't mean correct
+description: A CRDT promises every copy ends up the same, not that the result makes sense. How the shape of your data decides what merges well, and why sending intents instead of values pays off later.
+pubDate: 2026-11-24
+tags: [sync engines, crdt, collaboration, data modelling]
+draft: true
+---
+
+import ClipPlayground from '../../components/sync/ClipPlayground.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+[Part one](/blog/before-you-build-a-sync-engine/) ended on a warning. A CRDT guarantees that every copy of the
+document *converges*: they all end up the same. It says nothing about whether the thing they all agree on makes
+sense. Each field merges fine on its own, and together they break a rule your app depends on.
+
+This is the part of building a sync engine that no library can do for you, because the rules are yours. The good
+news is that most of the fix happens before you write any sync code, in how you shape your data. Get the shape
+right early and conflict resolution mostly takes care of itself. It also decides how easily you can add features
+later, which is the part I underestimated most.
+
+<SeriesNav current="conflict-free-is-not-correct" />
+
+## What "conflict-free" actually promises
+
+The "conflict-free" in CRDT is a promise about *replicas*, not about *meaning*. Apply the same set of changes, in
+any order, any number of times, and every copy lands on the same state. No copy ever has to stop and ask a person
+which version to keep.
+
+To keep that promise, a CRDT needs a rule for every pair of concurrent changes, and it needs every copy to apply
+the same rule. For the fields of a record, the usual rule is **last write wins, per key**. Each write carries a
+timestamp (a logical clock, plus the client id to break ties), and the newest write to a key wins. That's how a
+`Y.Map` merges, how Liveblocks' `LiveObject` merges, and roughly how
+[Figma merges properties](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/).
+
+It's a good rule. It's simple, it's predictable, and two people rarely edit the same field at the same moment. The
+problem is the word *per*. The rule looks at one key at a time. Your app doesn't.
+
+## A clip that ends before it starts
+
+Picture a video editor. A clip on the timeline has a point where it starts (`in`) and a point where it ends
+(`out`). The obvious way to store it is two fields:
+
+```ts
+const clip = doc.getMap('clip');
+clip.set('in', 2);
+clip.set('out', 8);
+```
+
+Alice drags the whole clip five seconds to the right, so her client writes `in: 7` and `out: 13`. At the same time,
+Bob drags the clip's end three seconds to the left, so his client writes `out: 5`. Each of them made a perfectly
+valid edit. Press **Move + trim** and watch what the merge makes of it:
+
+<ClipPlayground mode="inOut">
+  Under each copy are the fields it's stored as, with the stamp of the write that won (`1·A` is Alice's first
+  write). Alice's `in` and Bob's `out` both win their key, so the clip ends up running from 7s to 5s. Try
+  **Trim both ends** too, or drag the clips yourself; take one client offline to make the overlap as long as you
+  like.
+</ClipPlayground>
+
+Every copy agrees. The status says **In sync**. And the clip has a negative length. No step went wrong: both
+writes were valid, both arrived, and the CRDT applied its rule correctly to each key. The bug is in the data
+model. `in` and `out` aren't independent values, but we stored them as if they were, so the merge treated them
+as if they were.
+
+This isn't specific to timelines. Anything with two fields that only make sense together has the same shape: a
+calendar event's start and end, a crop box, a table cell's row span and the rows it spans, a "type" field and the
+fields that only exist for one type. Look for **rules that span more than one field**. Every one of them is a
+place where a per-field merge can break.
+
+## Decide what last-write-wins applies to
+
+If the problem is that last-write-wins splits two values that belong together, the first fix is to stop splitting
+them. Store the range as one value, and the merge has to take all of it or none of it:
+
+```ts
+clip.set('range', { in: 7, out: 13 }); // a plain object in a Y.Map is one value, merged as a unit
+```
+
+<ClipPlayground mode="whole">
+  The same two edits. Now Bob's write replaces the whole range, so the clip stays valid, and Alice's move is gone.
+  Her screen jumps back without a word.
+</ClipPlayground>
+
+That's valid, and it's also wrong in a quieter way: one person's work disappears. Make the value bigger and you
+make conflicts more likely, all the way up to "send the whole document", which is where
+[part one started](/blog/before-you-build-a-sync-engine/#attempt-one-send-the-whole-thing). Make it smaller and
+you're back to negative clips. You want values that are **as small as possible, and no smaller**.
+
+So ask a different question: what do people actually change on their own? Nobody thinks "I'll set the out point and
+leave the in point alone" while moving a clip. They think "move it" or "make it shorter". Store the clip the way
+people edit it, as where it starts and how long it is, and each common edit touches exactly one field:
+
+```ts
+clip.set('start', 2);
+clip.set('length', 6);
+```
+
+<ClipPlayground mode="startLength">
+  **Move + trim** now merges the way both people meant it: Alice's move writes `start`, Bob's trim writes `length`,
+  and the clip ends up at 7s–10s. Then try **Trim both ends**. Trimming the start changes both fields, so the two
+  edits collide on `length` again. The result is valid, but Bob's end lands at 9s, where neither of them put it.
+</ClipPlayground>
+
+Same data, same CRDT, different shape, and the most common conflict is gone. That's the cheapest fix in this whole
+series, and you only get it cheaply at the start. Once clips are stored with `in` and `out` in thousands of
+documents, changing the shape is a migration with old clients still online, which is
+[part three](#series).
+
+It isn't a complete fix, though. Some edits always touch more than one field, and per-field merging can't see
+that two of them belong to the same gesture. For those you need to stop sending values at all.
+
+## Send what the person did, not the values it produced
+
+Look at what actually went over the wire in the demos above: `out 5s`. That's a value. It's the *result* of what
+Bob did, worked out on his screen, against the clip as he saw it at that moment. By the time it reaches anyone
+else, the clip it was worked out from might not exist.
+
+What Bob did was "drag the end three seconds left". If that's what you send, the server can apply it to the clip
+as it is *now*, after Alice's move, and get the result both of them expected. This is the step from syncing state
+to syncing **intents**, sometimes called operations or mutations:
+
+```ts
+type ClipOp =
+  | { kind: 'move'; clipId: string; by: number }
+  | { kind: 'trimStart'; clipId: string; by: number }
+  | { kind: 'trimEnd'; clipId: string; by: number };
+```
+
+The server applies operations in the order they arrive and runs your rules on each one before it lands. Clients
+don't wait for it: each one shows the server's latest state with its own unconfirmed operations replayed on top,
+so edits still feel instant. It's the server-authoritative model from part one, and the way
+[Replicache](https://doc.replicache.dev/concepts/how-it-works) and Linear structure their mutations.
+
+<ClipPlayground mode="intent">
+  The pills now carry what each person did. The server applies them in order and sends back the result. Under each
+  client you can see its confirmed state and anything still queued. In **Trim both ends**, the second trim would
+  cross the first, so the server shortens it to the minimum length and says so in its log. Every copy converges,
+  and the clip is never broken, not even for a moment on the server.
+</ClipPlayground>
+
+Two things changed. The edits merge the way people meant them, because "move by +5s" still means something after
+someone else trimmed the clip. And there's now one place where every change passes through before it's stored,
+which is where your rules live:
+
+```ts
+function applyClipOp(clip: Clip, op: ClipOp): Clip {
+  switch (op.kind) {
+    case 'move': {
+      const by = clamp(op.by, -clip.start, TRACK_END - end(clip));
+      return { ...clip, start: clip.start + by };
+    }
+    case 'trimStart': {
+      const start = clamp(clip.start + op.by, 0, end(clip) - MIN_LENGTH);
+      return { ...clip, start, length: end(clip) - start };
+    }
+    case 'trimEnd':
+      return { ...clip, length: clamp(clip.length + op.by, MIN_LENGTH, TRACK_END - clip.start) };
+  }
+}
+```
+
+It runs on the server for the final say, and on the client so the person sees the same result straight away.
+
+You don't have to leave CRDTs to get this. A CRDT is a way to merge values, and nothing stops you from sending
+intents to a server that validates them and then writes the result into a Yjs document that clients sync as
+usual. That's closer to what we do on Flex than either pure option.
+
+## The rules you can't model away
+
+Shaping the data well removes most of the conflicts. It can't remove the rules that span *records*: two clips on
+the same track mustn't overlap, a clip can't point at a video file someone just deleted, a table row span can't
+reach past the last row. No choice of fields on one clip can protect a rule about two clips.
+
+For those you have two places to put the check, and you usually want both.
+
+**Validate on the way in.** If changes go through a server as intents, check every rule there and reject, adjust or
+normalise the change before it's stored. The trim above that gets shortened to the minimum length is this. It's the
+strongest guarantee, because nothing invalid is ever stored. It's also the part that needs a server in the path,
+and changes made offline for days will sometimes come back adjusted. Tell people when that happens.
+
+**Fix on read.** If you can't stop a bad state from being stored, because clients sync peer to peer or an old
+client writes straight into the document, make every reader repair it the same way:
+
+```ts
+function readClip(map: Y.Map<number>): Clip {
+  const start = Math.max(0, map.get('start') ?? 0);
+  const length = Math.max(MIN_LENGTH, map.get('length') ?? MIN_LENGTH);
+  return { start, length };
+}
+```
+
+The repair has to be *deterministic*: given the same stored state, every client on every version must produce the
+same result, or you've built a new way for copies to disagree. Keep the repair rules few and boring, and write them
+down next to the schema.
+
+Fix-on-read is also your safety net when validation has a bug. Stored data outlives the code that wrote it.
+
+## The shape you pick now decides what you can add later
+
+This is the part I'd tell myself earlier. The data model isn't only about today's conflicts. Every feature you add
+later either fits the shape you picked or fights it.
+
+Say you shipped clips as `in` and `out` fields, synced as values, and now the product asks for more:
+
+- **Snapping** to other clips and to the playhead. With values, each client snaps on its own screen and writes the
+  result. Two people snapping to each other's clips at once produce a gap or an overlap. With intents,
+  `{ kind: 'move', by: 5, snapTo: 'clip-42' }` is snapped on the server, against the clips as they really are.
+- **Ripple edits**, where trimming one clip shifts every clip after it. As values, that's one person writing the
+  `start` of twenty clips, each merged separately, against everyone else's edits to those same clips. As an intent,
+  it's one operation that the server applies in one step.
+- **An AI agent** that "tightens the edit". You want it to work through the same rules as people, and you want to
+  see what it meant to do, not only what it changed. An intent is both: it's validated like any other operation,
+  and it's a readable record of the agent's decision.
+- **Permissions**, such as "reviewers can trim but not move". You can't write that rule against a field called
+  `start`, since both a move and a trim change it. You can write it against an operation called `trimEnd`.
+- **Undo**. "Undo my trim" while someone else moved the clip is much easier when you know a trim happened than when
+  you only know that `out` changed from 8 to 5. That's [part five](#series).
+
+None of these is impossible with raw values. Each one is harder, and each one adds another place where a merge can
+break a rule. With intents, a new feature is usually a new operation type and a new case in the function that
+applies it. The validation, the server log, the permissions check and the audit trail are already there.
+
+The same goes for the shape of the stored data. `start` and `length` can take a playback speed later without
+changing meaning. `in` and `out` start arguing with it the moment someone asks whether `out` is in source time or
+timeline time.
+
+## What this looked like on Flex
+
+{/* TODO(Karol): replace with the real story — what the two-way sync looked like, the bug or feature that pushed
+the change, how long it took, and one concrete rule the pipeline now enforces. Keep it to what you can share. */}
+
+Flex started the way most collaborative editors do: each client changed its copy of the document and the changes
+synced both ways, as values. It worked, until the rules started to matter more than the merging. Elements whose
+properties only make sense together, layouts that have to stay valid as several people resize things at once, and
+later AI agents making edits next to people.
+
+We moved to a pipeline where every change states what it means to do. Each operation is validated, normalised, and
+fixed up where it can be, before it's applied and synced to everyone else. Yjs still does the merging. It just never
+sees a change the rest of the app wouldn't accept. That pipeline is what made it straightforward to let AI agents
+edit the same documents as people: an agent's edits go through exactly the same checks.
+
+## Before you write any sync code
+
+Questions I'd ask about a data model, in this order:
+
+1. **Which rules span more than one field?** List them. Start and end, type and type-specific fields, totals and
+   the items they total. Each one is a place a per-field merge can break.
+2. **What do people change on their own?** Make those your fields. If one common gesture writes two fields,
+   the fields are probably the wrong shape.
+3. **Which values must change together?** Store them as one value, and accept that concurrent edits to it will
+   overwrite each other.
+4. **Which rules span records?** Those need validation on the server, a deterministic repair on read, or both.
+5. **Would you rather sync values or intents?** If you need validation, permissions on actions, AI edits you can
+   inspect, or undo that understands what happened, it's intents. That choice is much cheaper on day one.
+6. **What happens to an invalid change?** Reject it, adjust it, or repair it on read. Decide before it happens, and
+   decide how the person finds out.
+7. **What will you add next year?** Snapping, ripple edits, permissions, agents. Check that your shape has room
+   for them.
+
+<div id="series">
+  <SeriesNav current="conflict-free-is-not-correct" />
+</div>
+
+Further reading: Matt Weidner's [CRDT survey, part 2](https://mattweidner.com/2023/09/26/crdt-survey-2.html) on
+designing data so it merges the way people expect, and Martin Kleppmann's
+[CRDTs: the hard parts](https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html).
+
+Next up: you've picked a good shape, and a year later you need a different one. How to change a schema while old
+clients are still online, writing the old shape into the same document.

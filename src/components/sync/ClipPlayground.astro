@@ -1,0 +1,684 @@
+---
+// Two clients and a server editing one clip on a video timeline, with every message drawn
+// travelling over the wire. How the clip is stored and merged lives in ./clip-engine.ts; this
+// file is the stage. It shares its look with <SyncPlayground>.
+import { SCENARIOS, TRACK, type Mode } from './clip-engine';
+
+interface Props {
+  mode: Mode;
+  title?: string;
+}
+
+const TITLES: Record<Mode, string> = {
+  inOut: 'Two fields, last write wins each',
+  whole: 'One value for the whole range',
+  startLength: 'Start and length',
+  intent: 'Send what the person did',
+};
+const SERVER_NOTE: Record<Mode, string> = {
+  inOut: 'relays + stores',
+  whole: 'relays + stores',
+  startLength: 'relays + stores',
+  intent: 'orders + validates',
+};
+const PEERS = [
+  { id: 'alice', name: 'Alice' },
+  { id: 'bob', name: 'Bob' },
+];
+const { mode, title = TITLES[mode] } = Astro.props;
+const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
+---
+
+<figure class="clips" data-clips={mode}>
+  <div class="bar">
+    <span class="title">{title}</span>
+    <div class="actions">
+      {Object.entries(SCENARIOS).map(([key, s]) => (
+        <button type="button" data-play={key}>▶ {s.label}</button>
+      ))}
+      <button type="button" data-reset>Reset</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <svg class="wires" aria-hidden="true">
+      {PEERS.map((p) => <path data-wire={p.id} />)}
+    </svg>
+    {PEERS.map((p) => (
+      <div class="peer" data-peer={p.id}>
+        <div class="peer-head">
+          <span class="name"><span class="swatch" />{p.name}</span>
+          <label class="toggle">
+            <input type="checkbox" checked data-online />
+            <span>online</span>
+          </label>
+        </div>
+        <div class="timeline" data-timeline>
+          <div class="clip" data-clip tabindex="0" aria-label={`${p.name}'s clip. Drag it, or use the arrow keys, to move it.`}>
+            <span class="handle start" data-handle="trimStart" tabindex="0" aria-label={`${p.name}'s clip start. Arrow keys trim.`} />
+            <span class="len" data-len />
+            <span class="handle end" data-handle="trimEnd" tabindex="0" aria-label={`${p.name}'s clip end. Arrow keys trim.`} />
+          </div>
+        </div>
+        <div class="scale" aria-hidden="true">{LABELS.map((s) => <span>{s}s</span>)}</div>
+        <div class="fields" data-fields />
+        <span class="queued" data-queued hidden />
+      </div>
+    ))}
+    <div class="server">
+      <div class="peer-head">
+        <span class="name">Server</span>
+        <span class="muted note">{SERVER_NOTE[mode]}</span>
+      </div>
+      <div class="timeline readonly" data-timeline>
+        <div class="clip" data-clip><span class="len" data-len /></div>
+      </div>
+      <div class="fields" data-fields />
+      <ol class="log" data-log aria-live="polite" />
+    </div>
+  </div>
+
+  <div class="foot">
+    <label class="latency">
+      <span>Latency</span>
+      <input type="range" min="200" max="3000" step="100" value="1400" data-latency />
+      <output data-latency-out>1.4s</output>
+    </label>
+    <span class="status" data-status>In sync</span>
+  </div>
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .clips {
+    --alice: var(--accent);
+    --bob: light-dark(#2459d6, #7aa7ff);
+    --line: light-dark(#d9d3ca, #3a3132);
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .bar, .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
+  }
+  .bar { justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .foot { border-top: 1px solid var(--border); color: var(--muted); }
+  .title { font-weight: 600; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  button {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out), background-color 120ms;
+  }
+  button:hover { background: var(--border); }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  .stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'alice bob' 'server server';
+    gap: 4.5rem 1rem;
+    padding: 1.25rem 1rem;
+  }
+  .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .wires path { fill: none; stroke: var(--line); stroke-width: 1.5; transition: opacity 250ms; }
+  .wires path.offline { stroke-dasharray: 4 6; opacity: 0.7; }
+
+  .peer, .server {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    padding: 0.6rem 0.7rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    transition: border-color 300ms, box-shadow 300ms;
+  }
+  .peer[data-peer='alice'] { grid-area: alice; --who: var(--alice); }
+  .peer[data-peer='bob'] { grid-area: bob; --who: var(--bob); }
+  .server { grid-area: server; justify-self: center; width: min(100%, 26rem); --who: var(--muted); }
+  .peer.offline { opacity: 0.85; border-style: dashed; }
+  .flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--flash) 18%, transparent); border-color: color-mix(in srgb, var(--flash) 60%, var(--border)); }
+
+  .peer-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; }
+  .name { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; }
+  .swatch { width: 0.6rem; height: 0.6rem; border-radius: 99px; background: var(--who); }
+  .note { font-size: 0.8rem; }
+
+  .toggle { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+  .toggle input { accent-color: var(--accent); margin: 0; }
+
+  /* The track: one tick per second, a stronger one every five. */
+  .timeline {
+    position: relative;
+    height: 2.4rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background:
+      repeating-linear-gradient(to right, color-mix(in srgb, var(--fg) 14%, transparent) 0 1px, transparent 1px calc(25% - 0.01px)),
+      repeating-linear-gradient(to right, color-mix(in srgb, var(--fg) 6%, transparent) 0 1px, transparent 1px calc(5% - 0.01px)),
+      var(--surface);
+    touch-action: none;
+    transition: border-color 250ms;
+  }
+  .timeline.broken { border-color: var(--danger); }
+  .scale { display: flex; justify-content: space-between; margin-top: 0.15rem; font: 0.65rem/1.2 var(--font-mono); color: var(--muted); }
+  .scale span:first-child { translate: 0; }
+
+  .clip {
+    position: absolute;
+    top: 0.3rem;
+    bottom: 0.3rem;
+    left: calc(var(--from) * 100%);
+    width: max(3px, calc(var(--span) * 100%));
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--who) 22%, var(--surface));
+    border: 1.5px solid var(--who);
+    color: var(--fg);
+    cursor: grab;
+    transition: left 220ms var(--ease-out), width 220ms var(--ease-out), background-color 200ms;
+    outline: none;
+  }
+  .clip:focus-visible, .handle:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--who); }
+  .dragging .clip { transition: none; cursor: grabbing; }
+  .readonly .clip { cursor: default; }
+  /* out is before in: draw the gap between them as a hatched, red "negative" clip. */
+  .clip.invalid {
+    --who: var(--danger);
+    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--danger) 30%, transparent) 0 4px, transparent 4px 8px);
+    border-style: dashed;
+    animation: shake 380ms var(--ease-out);
+  }
+  .len { font: 600 0.7rem/1 var(--font-mono); white-space: nowrap; pointer-events: none; }
+  .clip.invalid .len { color: var(--danger); }
+  .handle {
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    width: 0.6rem;
+    cursor: ew-resize;
+    background: var(--who);
+    outline: none;
+  }
+  .handle.start { left: -1px; border-radius: 4px 0 0 4px; }
+  .handle.end { right: -1px; border-radius: 0 4px 4px 0; }
+  .clip.invalid .handle { opacity: 0.5; }
+
+  .fields { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 0.5rem; min-height: 1.6rem; }
+  .fields :global(.field) {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border-bottom: 2px solid var(--c, var(--line));
+    background: color-mix(in srgb, var(--c, var(--line)) 12%, transparent);
+    font: 0.75rem/1.4 var(--font-mono);
+  }
+  .fields :global(.field b) { font-weight: 400; color: var(--muted); }
+  .fields :global(.field i) { font-style: normal; font-size: 0.62rem; color: var(--muted); }
+  .fields :global(.field.alice) { --c: var(--alice); }
+  .fields :global(.field.bob) { --c: var(--bob); }
+  .fields :global(.field.pending) { border-bottom-style: dashed; opacity: 0.8; }
+  .fields :global(.field.new) { animation: pop 320ms var(--ease-out); }
+
+  .queued {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    translate: -50% 55%;
+    padding: 0.05rem 0.5rem;
+    border-radius: 99px;
+    background: var(--who);
+    color: var(--accent-fg);
+    font: 600 0.72rem/1.5 var(--font-mono);
+    white-space: nowrap;
+  }
+  .queued[hidden] { display: none; }
+
+  .log { list-style: none; margin: 0.5rem 0 0; padding: 0; font: 0.75rem/1.5 var(--font-mono); color: var(--muted); min-height: 4.5em; }
+  .log :global(li) { display: flex; gap: 0.4rem; align-items: baseline; white-space: nowrap; animation: fade-in 200ms var(--ease-out); }
+  .log :global(li span) { overflow: hidden; text-overflow: ellipsis; }
+  .log :global(li::before) { content: ''; flex: none; width: 0.45rem; height: 0.45rem; border-radius: 99px; background: var(--who); translate: 0 -0.05rem; }
+  .log :global(li.alice) { --who: var(--alice); }
+  .log :global(li.bob) { --who: var(--bob); }
+  .log :global(li.changed) { color: var(--fg); }
+
+  .latency { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .latency input { width: 7rem; accent-color: var(--accent); }
+  .latency output { font-family: var(--font-mono); min-width: 2.5rem; }
+  .status { margin-left: auto; font-weight: 600; }
+  .status.ok { color: var(--success); }
+  .status.bad { color: var(--danger); }
+
+  figcaption { padding: 0 1rem 0.9rem; color: var(--muted); font-size: 0.88rem; }
+  figcaption:empty { display: none; }
+
+  .stage :global(.pill) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    offset-rotate: 0deg;
+    offset-anchor: center;
+    padding: 0.1rem 0.5rem;
+    border-radius: 99px;
+    background: var(--who);
+    color: var(--accent-fg);
+    font: 600 0.72rem/1.5 var(--font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+  }
+  .stage :global(.pill.alice) { --who: var(--alice); }
+  .stage :global(.pill.bob) { --who: var(--bob); }
+  .stage :global(.pill.ack) { --who: var(--muted); font-weight: 400; }
+  .stage :global(.pill small) { font-size: inherit; font-weight: 400; opacity: 0.8; }
+
+  @keyframes pop { from { transform: scale(0.6); opacity: 0; } }
+  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes shake { 30% { translate: -3px 0; } 60% { translate: 3px 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .clip { transition: none; }
+    .clip.invalid { animation: none; }
+  }
+  @media (max-width: 30rem) {
+    .stage { gap: 4rem 0.6rem; padding-inline: 0.6rem; }
+    .peer, .server { padding: 0.5rem; }
+    .toggle span { font-size: 0.75rem; }
+    .fields :global(.field i) { display: none; }
+  }
+</style>
+
+<script>
+  import {
+    STRATEGIES, SCENARIOS, CLIENTS, TRACK, apply, fmt, valid,
+    type Clip, type ClientId, type Gesture, type Message, type Mode, type Replica, type Strategy,
+  } from './clip-engine';
+
+  const INITIAL: Clip = { in: 2, out: 8 };
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const GAP = 360;
+  const STEP = 0.5;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const snap = (s: number) => Math.round(s / STEP) * STEP;
+
+  // Cloudflare's Worker types redeclare Element.append for HTMLRewriter, so this script sticks to
+  // appendChild and insertBefore.
+
+  type Drag = { kind: Gesture['kind']; base: Clip; preview: Clip; x: number };
+
+  function setup(root: HTMLElement) {
+    const mode = root.dataset.clips as Mode;
+    const stage = root.querySelector<HTMLElement>('.stage')!;
+    const serverEl = root.querySelector<HTMLElement>('.server')!;
+    const log = root.querySelector<HTMLOListElement>('[data-log]')!;
+    const status = root.querySelector<HTMLElement>('[data-status]')!;
+    const latencyInput = root.querySelector<HTMLInputElement>('[data-latency]')!;
+    const latencyOut = root.querySelector<HTMLOutputElement>('[data-latency-out]')!;
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-play]')];
+
+    const view = (el: HTMLElement) => ({
+      el,
+      timeline: el.querySelector<HTMLElement>('[data-timeline]')!,
+      clip: el.querySelector<HTMLElement>('[data-clip]')!,
+      len: el.querySelector<HTMLElement>('[data-len]')!,
+      fields: el.querySelector<HTMLElement>('[data-fields]')!,
+      seen: new Set<string>(),
+    });
+    const views = {
+      server: view(serverEl),
+      ...Object.fromEntries(CLIENTS.map((id) => [id, view(root.querySelector<HTMLElement>(`[data-peer="${id}"]`)!)])),
+    } as Record<Replica, ReturnType<typeof view>>;
+    const peers = Object.fromEntries(
+      CLIENTS.map((id) => {
+        const el = views[id].el;
+        return [id, {
+          online: el.querySelector<HTMLInputElement>('[data-online]')!,
+          queued: el.querySelector<HTMLElement>('[data-queued]')!,
+          wire: root.querySelector<SVGPathElement>(`[data-wire="${id}"]`)!,
+        }];
+      }),
+    ) as Record<ClientId, { online: HTMLInputElement; queued: HTMLElement; wire: SVGPathElement }>;
+
+    let strategy: Strategy;
+    let generation = 0;
+    let inFlight = 0;
+    let latency = Number(latencyInput.value);
+    const drags: Partial<Record<ClientId, Drag>> = {};
+
+    // ---- The network: one FIFO queue per client and direction, held while offline. ----
+    type Dir = 'up' | 'down';
+    const queues: Record<ClientId, Record<Dir, Message[]>> = { alice: { up: [], down: [] }, bob: { up: [], down: [] } };
+    let lastDepart: Record<string, number> = {};
+    let lastArrival: Record<string, number> = {};
+    let busy: Record<string, boolean> = {};
+
+    function send(client: ClientId, dir: Dir, msg: Message) {
+      queues[client][dir].push(msg);
+      pump(client, dir);
+    }
+
+    function pump(client: ClientId, dir: Dir) {
+      const key = client + dir;
+      const queue = queues[client][dir];
+      if (busy[key] || !peers[client].online.checked || !queue.length) return refresh();
+      busy[key] = true;
+      const gen = generation;
+      setTimeout(() => {
+        if (gen !== generation) return;
+        busy[key] = false;
+        if (!peers[client].online.checked || !queue.length) return refresh();
+        const batch = queue.splice(0);
+        const msg = batch[batch.length - 1];
+        const t = performance.now();
+        lastDepart[key] = t;
+        const arrive = Math.max(t + latency, (lastArrival[key] ?? 0) + GAP);
+        lastArrival[key] = arrive;
+        const sender = dir === 'up' ? client : msg.from ?? otherOf(client);
+        fly(client, dir, msg, sender, arrive - t, batch.length, batch.every((m) => m.ack));
+        inFlight++;
+        setTimeout(() => {
+          if (gen !== generation) return;
+          inFlight--;
+          for (const m of batch) {
+            if (dir === 'up') onServer(client, m);
+            else onClient(client, m);
+          }
+          refresh();
+        }, arrive - t);
+        pump(client, dir);
+      }, Math.max(0, (lastDepart[key] ?? -Infinity) + GAP - performance.now()));
+      refresh();
+    }
+
+    const otherOf = (c: ClientId): ClientId => (c === 'alice' ? 'bob' : 'alice');
+
+    function fly(client: ClientId, dir: Dir, msg: Message, sender: ClientId, ms: number, count: number, ack: boolean) {
+      const el = document.createElement('span');
+      el.className = `pill ${ack ? 'ack' : sender}`;
+      el.textContent = msg.label;
+      if (count > 1) {
+        const n = document.createElement('small');
+        n.textContent = ` +${count - 1}`;
+        el.appendChild(n);
+      }
+      el.style.offsetPath = `path("${peers[client].wire.getAttribute('d')}")`;
+      stage.appendChild(el);
+      const at = (pct: number) => `${dir === 'up' ? pct : 100 - pct}%`;
+      const animation = reduceMotion.matches
+        ? el.animate({ offsetDistance: ['50%', '50%'], opacity: [0, 1, 1, 0] }, { duration: ms })
+        : el.animate(
+            [
+              { offsetDistance: at(0), opacity: 0, transform: 'scale(0.8)' },
+              { opacity: 1, transform: 'scale(1)', offset: 0.08 },
+              { opacity: 1, transform: 'scale(1)', offset: 0.92 },
+              { offsetDistance: at(100), opacity: 0, transform: 'scale(0.9)' },
+            ],
+            { duration: ms, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' },
+          );
+      animation.onfinish = animation.oncancel = () => el.remove();
+    }
+
+    // ---- What happens when a message lands. ----
+    function onServer(from: ClientId, msg: Message) {
+      const { log: entry, out } = strategy.serverReceive(from, msg);
+      if (entry) {
+        const li = document.createElement('li');
+        li.className = from + (entry.changed ? ' changed' : '');
+        const text = document.createElement('span');
+        text.textContent = entry.text;
+        text.title = entry.text;
+        li.appendChild(text);
+        log.insertBefore(li, log.firstChild);
+        while (log.children.length > 3) log.lastElementChild!.remove();
+      }
+      render('server');
+      flash(serverEl, from);
+      for (const o of out) send(o.to, 'down', { ...o.msg, from });
+    }
+
+    function onClient(who: ClientId, msg: Message) {
+      const { out } = strategy.clientReceive(who, msg);
+      render(who);
+      if (!msg.ack && msg.from) flash(views[who].el, msg.from);
+      for (const m of out) send(who, 'up', m);
+    }
+
+    const flashTimers = new Map<HTMLElement, number>();
+    function flash(el: HTMLElement, by: ClientId) {
+      el.style.setProperty('--flash', `var(--${by})`);
+      el.classList.add('flash');
+      clearTimeout(flashTimers.get(el));
+      flashTimers.set(el, window.setTimeout(() => el.classList.remove('flash'), 700));
+    }
+
+    // ---- Drawing one copy: the clip on its track, and the fields it's stored as. ----
+    function render(who: Replica) {
+      const v = views[who];
+      const drag = who === 'server' ? undefined : drags[who];
+      const c = drag?.preview ?? strategy.clip(who);
+      const broken = c.out < c.in;
+      const from = Math.min(c.in, c.out);
+      v.clip.style.setProperty('--from', String(from / TRACK));
+      v.clip.style.setProperty('--span', String(Math.abs(c.out - c.in) / TRACK));
+      if (broken && !v.clip.classList.contains('invalid')) v.clip.classList.add('invalid');
+      if (!broken) v.clip.classList.remove('invalid');
+      v.timeline.classList.toggle('broken', !valid(c));
+      v.len.textContent = broken ? `−${fmt(c.in - c.out)}` : fmt(c.out - c.in);
+      v.clip.title = `in ${fmt(c.in)}, out ${fmt(c.out)}${broken ? ' — ends before it starts' : ''}`;
+
+      const fields = strategy.fields(who);
+      v.fields.replaceChildren(
+        ...fields.map((f, i) => {
+          const key = `${i}:${f.key}=${f.value}@${f.stamp ?? ''}`;
+          const el = document.createElement('span');
+          el.className = `field ${f.by ?? ''}${f.pending ? ' pending' : ''}${v.seen.has(key) ? '' : ' new'}`;
+          el.title = f.pending
+            ? 'sent, not yet confirmed by the server'
+            : f.stamp
+              ? `written by ${f.by}, Lamport clock ${f.stamp.split('·')[0]}`
+              : 'not edited yet';
+          const k = document.createElement('b');
+          k.textContent = f.key;
+          el.appendChild(k);
+          el.appendChild(document.createTextNode(f.value));
+          if (f.stamp) {
+            const s = document.createElement('i');
+            s.textContent = f.stamp;
+            el.appendChild(s);
+          }
+          return el;
+        }),
+      );
+      v.seen = new Set(fields.map((f, i) => `${i}:${f.key}=${f.value}@${f.stamp ?? ''}`));
+    }
+
+    function refresh() {
+      for (const id of CLIENTS) {
+        const offline = !peers[id].online.checked;
+        const up = queues[id].up.length;
+        peers[id].queued.hidden = !offline || up === 0;
+        peers[id].queued.textContent = `${up} unsent`;
+        views[id].el.classList.toggle('offline', offline);
+        peers[id].wire.classList.toggle('offline', offline);
+      }
+      const pending = inFlight + CLIENTS.reduce((n, c) => n + queues[c].up.length + queues[c].down.length, 0);
+      const copies = (['alice', 'bob', 'server'] as Replica[]).map((r) => strategy.clip(r));
+      const same = new Set(copies.map((c) => `${c.in}/${c.out}`)).size === 1;
+      status.className = 'status';
+      if (pending) status.textContent = 'Syncing…';
+      else if (!same) {
+        status.textContent = 'Diverged ✗';
+        status.classList.add('bad');
+      } else if (!valid(copies[0])) {
+        status.textContent = 'In sync, and broken ✗';
+        status.classList.add('bad');
+      } else {
+        status.textContent = 'In sync ✓';
+        status.classList.add('ok');
+      }
+    }
+
+    // ---- Local edits: drag the body to move, an edge to trim; or use the arrow keys. ----
+    function commit(who: ClientId, g: Gesture) {
+      if (!g.by) return;
+      for (const m of strategy.gesture(who, g)) send(who, 'up', m);
+      render(who);
+    }
+
+    function gestureFor(kind: Gesture['kind'], base: Clip, to: Clip): Gesture {
+      return { kind, by: kind === 'trimEnd' ? to.out - base.out : to.in - base.in };
+    }
+
+    function startDrag(who: ClientId, kind: Gesture['kind'], x: number) {
+      const base = strategy.clip(who);
+      drags[who] = { kind, base, preview: base, x };
+      views[who].timeline.classList.add('dragging');
+    }
+    function moveDrag(who: ClientId, x: number) {
+      const d = drags[who];
+      if (!d) return;
+      const width = views[who].timeline.getBoundingClientRect().width;
+      d.preview = apply(d.base, { kind: d.kind, by: snap(((x - d.x) / width) * TRACK) }).clip;
+      render(who);
+    }
+    function endDrag(who: ClientId) {
+      const d = drags[who];
+      if (!d) return;
+      delete drags[who];
+      views[who].timeline.classList.remove('dragging');
+      commit(who, gestureFor(d.kind, d.base, d.preview));
+      render(who);
+    }
+
+    for (const id of CLIENTS) {
+      const v = views[id];
+      v.clip.addEventListener('pointerdown', (e) => {
+        if (drags[id] || e.button !== 0) return;
+        const handle = (e.target as HTMLElement).closest<HTMLElement>('[data-handle]');
+        startDrag(id, (handle?.dataset.handle as Gesture['kind']) ?? 'move', e.clientX);
+        v.clip.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      v.clip.addEventListener('pointermove', (e) => moveDrag(id, e.clientX));
+      v.clip.addEventListener('pointerup', () => endDrag(id));
+      v.clip.addEventListener('pointercancel', () => endDrag(id));
+      v.clip.addEventListener('keydown', (e) => {
+        const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        if (!dir || drags[id]) return;
+        e.preventDefault();
+        const handle = (e.target as HTMLElement).closest<HTMLElement>('[data-handle]');
+        const kind = (handle?.dataset.handle as Gesture['kind']) ?? 'move';
+        const base = strategy.clip(id);
+        commit(id, gestureFor(kind, base, apply(base, { kind, by: dir * STEP }).clip));
+      });
+      peers[id].online.addEventListener('change', () => {
+        pump(id, 'up');
+        pump(id, 'down');
+      });
+    }
+
+    // ---- Drawing the wires. ----
+    function layout() {
+      const box = stage.getBoundingClientRect();
+      const s = serverEl.getBoundingClientRect();
+      for (const id of CLIENTS) {
+        const p = views[id].el.getBoundingClientRect();
+        const x1 = p.left + p.width / 2 - box.left;
+        const y1 = p.bottom - box.top;
+        const x2 = s.left + s.width / 2 - box.left;
+        const y2 = s.top - box.top;
+        const my = (y1 + y2) / 2;
+        peers[id].wire.setAttribute('d', `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`);
+      }
+    }
+    new ResizeObserver(layout).observe(stage);
+
+    function reset() {
+      generation++;
+      inFlight = 0;
+      strategy = STRATEGIES[mode](INITIAL);
+      stage.querySelectorAll('.pill').forEach((p) => p.remove());
+      log.replaceChildren();
+      lastDepart = {};
+      lastArrival = {};
+      busy = {};
+      for (const id of CLIENTS) {
+        queues[id].up = [];
+        queues[id].down = [];
+        peers[id].online.checked = true;
+        delete drags[id];
+        views[id].timeline.classList.remove('dragging');
+      }
+      for (const r of ['alice', 'bob', 'server'] as Replica[]) {
+        render(r);
+        views[r].fields.querySelectorAll('.new').forEach((f) => f.classList.remove('new'));
+      }
+      buttons.forEach((b) => (b.disabled = false));
+      refresh();
+    }
+
+    // ---- Scripted scenarios: both people drag at the same moment, as if by hand. ----
+    async function drag(who: ClientId, g: Gesture, gen: number) {
+      const base = strategy.clip(who);
+      drags[who] = { kind: g.kind, base, preview: base, x: 0 };
+      views[who].timeline.classList.add('dragging');
+      const steps = Math.abs(g.by) / STEP;
+      for (let i = 1; i <= steps; i++) {
+        await wait(reduceMotion.matches ? 40 : 110);
+        if (gen !== generation) return;
+        drags[who]!.preview = apply(base, { kind: g.kind, by: Math.sign(g.by) * i * STEP }).clip;
+        render(who);
+      }
+      await wait(150);
+      if (gen !== generation) return;
+      endDrag(who);
+    }
+
+    async function play(key: string) {
+      reset();
+      const gen = generation;
+      buttons.forEach((b) => (b.disabled = true));
+      const s = SCENARIOS[key];
+      await wait(250);
+      await Promise.all([drag('alice', s.alice, gen), drag('bob', s.bob, gen)]);
+      if (gen !== generation) return;
+      buttons.forEach((b) => (b.disabled = false));
+    }
+
+    latencyInput.addEventListener('input', () => {
+      latency = Number(latencyInput.value);
+      latencyOut.value = `${(latency / 1000).toFixed(1)}s`;
+    });
+    root.querySelector('[data-reset]')!.addEventListener('click', reset);
+    for (const b of buttons) b.addEventListener('click', () => play(b.dataset.play!));
+
+    reset();
+    layout();
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-clips]').forEach(setup);
+</script>
