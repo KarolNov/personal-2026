@@ -169,6 +169,12 @@ the same stored state, or you've built a new way for copies to disagree. Keep th
 write them down next to the schema. Fix-on-read is also your safety net when validation has a bug. Stored data
 outlives the code that wrote it.
 
+And assume the read fix will miss something too. Build the UI so that one bad value can't take the whole document
+down with it. Clamp a negative width to 0 where you draw it, fall back to a default when a value is missing or the
+wrong type, and wrap each element in its own error boundary so a broken one renders as a placeholder instead of
+blanking the canvas. None of these layers has to be perfect, because there are several of them: the shape of the
+data, the server's repair, the read fix and a UI that survives what gets past all three.
+
 Look at the position example again, though. That fix exists because of a modelling choice. Had position been one
 value, shaped differently per mode, the invalid state couldn't be stored in the first place:
 
@@ -247,6 +253,7 @@ Questions I'd ask about a data model, in this order:
    doesn't use. That's one less repair to write.
 5. **Which rules span records?** Those need a repair on the server.
 6. **What does every reader do with invalid data?** Write one deterministic read fix per rule, next to the schema.
+   Then make the UI survive whatever gets past it anyway.
 7. **What will you add next year?** New modes, new properties, AI edits, permissions. Check that your shape has
    room for them.
 
