@@ -1,7 +1,8 @@
 // The red ball on the About page: it starts as the title's underline, rides down the left margin
 // with a fading trail as you scroll, stretches into an underline under each role and section
-// heading you settle on, and finishes by filling in the "Get in touch" button. The markup and
-// styles it drives (.ball, .trail, .timeline, .roles, .touch) live in src/pages/about.astro.
+// heading you settle on, wakes the contribution graph by touching its edge, and finishes by
+// filling in the "Get in touch" button. The markup and styles it drives (.ball, .trail, .timeline,
+// .roles, .graph, .touch) live in src/pages/about.astro and src/components/ContributionGraph.astro.
 export function initScrollBall() {
   const ball = document.querySelector<HTMLElement>('.ball');
   const canvas = document.querySelector<HTMLCanvasElement>('.trail');
@@ -10,18 +11,24 @@ export function initScrollBall() {
   const timeline = document.querySelector<HTMLElement>('.timeline');
   const list = timeline?.querySelector<HTMLElement>('.roles');
   const touch = document.querySelector<HTMLElement>('.touch');
+  // The contribution graph's wrapper. The graph inside it is replaced once the live copy loads.
+  const graph = document.querySelector<HTMLElement>('.graph');
   const ctx = canvas?.getContext('2d');
 
   if (ball && canvas && ctx && main && title && timeline && list && touch) {
     const roles = [...list.querySelectorAll<HTMLElement>(':scope > li')];
     // Where the ball stops after the title, in order: each role's heading, each later section's
-    // heading, and finally the "Get in touch" button. A stop's zone is the stretch of page it
-    // belongs to; the ball arrives as the zone reaches the reading line.
+    // heading and the contribution graph, in page order, and finally the "Get in touch" button.
+    // A stop's zone is the stretch of page it belongs to; the ball arrives as the zone reaches the
+    // reading line.
     const stops = [
       ...roles.map((role) => ({ el: role.querySelector<HTMLElement>('.role-head')!, zone: role })),
-      ...[...main.querySelectorAll<HTMLElement>('section h2')]
-        .filter((h2) => !h2.closest('section')!.contains(timeline) && !h2.closest('section')!.contains(touch))
-        .map((h2) => ({ el: h2, zone: h2.closest('section')! })),
+      ...[
+        ...[...main.querySelectorAll<HTMLElement>('section h2')]
+          .filter((h2) => !h2.closest('section')!.contains(timeline) && !h2.closest('section')!.contains(touch))
+          .map((h2) => ({ el: h2, zone: h2.closest('section')! })),
+        ...(graph?.querySelector('.contributions') ? [{ el: graph, zone: graph }] : []),
+      ].sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)),
       { el: touch, zone: touch },
     ];
     const dot = ball.offsetWidth;
@@ -167,8 +174,18 @@ export function initScrollBall() {
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
     function target(): { box: Box; line: HTMLElement | null } {
-      // Headings get an underline; the button gets filled in.
+      // Headings get an underline, the graph a touch, and the button gets filled in.
       const shape = (el: HTMLElement) => {
+        // The graph isn't underlined: the ball stays round and touches the left edge of its grid
+        // of days, level with the fourth row (Wednesdays, the middle of the week), which wakes it.
+        // The row is measured on the last full week, as the first and current ones can be short.
+        if (el === graph) {
+          const grid = box(graph.querySelector<HTMLElement>('.grid') ?? graph);
+          const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
+          const day = full?.querySelectorAll<HTMLElement>('.day')[3];
+          const mid = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
+          return { box: { x: grid.left - dot - 2, y: mid - dot / 2, w: dot, h: dot }, line: el };
+        }
         const b = box(el);
         return el === touch
           ? { box: { x: b.left, y: b.top, w: b.width, h: b.height }, line: el }
@@ -248,6 +265,44 @@ export function initScrollBall() {
     // Recent positions of the ball's leading end, in main's coordinates.
     let trail: { x: number; y: number; t: number }[] = [];
 
+    // The contribution graph starts dimmed. When the ball touches it, it wakes: the colour runs
+    // out from where it touched, and it stays awake.
+    const WAKE_MS = 650;
+    const ROW_MS = 60;
+    let woken = false;
+    let figure: HTMLElement | null = null;
+    // Picks up the graph, again whenever the live copy replaces the one built with the page.
+    function syncGraph() {
+      const current = graph?.querySelector<HTMLElement>('.contributions') ?? null;
+      if (current === figure) return;
+      figure = current;
+      figure?.classList.toggle('asleep', !woken && !reduceMotion.matches);
+    }
+    function wake() {
+      if (woken || !figure) return;
+      woken = true;
+      const fig = figure;
+      // It ripples out from the square the ball touched (the first column's fourth row): left to
+      // right across the weeks, and up and down from the middle of each week. Weeks hidden on
+      // narrow screens don't count towards the run.
+      const weeks = [...fig.querySelectorAll<HTMLElement>('.week')].filter((w) => w.offsetWidth > 0);
+      weeks.forEach((week, i) => {
+        for (const day of week.querySelectorAll<HTMLElement>('.day:not(.empty)')) {
+          // Each day sits on grid row 2 (Sunday) to 8 (Saturday); row 5 is Wednesday.
+          const fromMiddle = Math.abs(Number(day.style.gridRowStart) - 5) || 0;
+          day.style.setProperty('--delay', `${Math.round((i / weeks.length) * WAKE_MS + fromMiddle * ROW_MS)}ms`);
+        }
+      });
+      fig.classList.add('waking');
+      fig.classList.remove('asleep');
+      // Afterwards colour changes (e.g. the theme) are instant again.
+      setTimeout(() => fig.classList.remove('waking'), WAKE_MS + 3 * ROW_MS + 600);
+    }
+    // Reduced motion leaves the graph awake from the start.
+    reduceMotion.addEventListener('change', () => {
+      if (reduceMotion.matches) figure?.classList.remove('asleep');
+    });
+
     function render() {
       // Squash and stretch along the direction of travel while it's a ball.
       const speed = Math.hypot(vel.x, vel.y);
@@ -262,6 +317,7 @@ export function initScrollBall() {
         roles.forEach((role, i) => role.classList.toggle('active', i === active));
         list!.classList.toggle('dim', active >= 0);
       }
+      if (line === graph) wake();
       ball!.style.width = `${pos.w}px`;
       ball!.style.height = `${pos.h}px`;
       ball!.style.transform =
@@ -443,8 +499,18 @@ export function initScrollBall() {
       else last = 0;
     }
 
+    // Scrolled past the graph without the ball stopping there (it moved on to the next stop, or
+    // the scroll was too quick to land): it wakes anyway, as soon as it's on screen.
+    const graphStop = stops.findIndex((s) => s.el === graph);
+    function wakeIfPassed() {
+      if (woken || graphStop < 0 || !figure || scrollY < 16 || readingLine() < hold(graphStop)) return;
+      const { top, bottom } = figure.getBoundingClientRect();
+      if (bottom > 0 && top < innerHeight) wake();
+    }
+
     function update() {
       ({ box: goal, line: goalLine } = target());
+      wakeIfPassed();
       if (line && line === goalLine) lineBox = goal;
       if (goalLine && goalLine === line) pending = null;
       else if (speed > FAST_PX_PER_S) {
@@ -461,6 +527,7 @@ export function initScrollBall() {
 
     function resize() {
       measureView();
+      syncGraph();
       sizeTrail();
       update();
     }
@@ -524,6 +591,7 @@ export function initScrollBall() {
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(resize).observe(main);
+    if (graph) new MutationObserver(resize).observe(graph, { childList: true, subtree: true });
     resize();
   }
 }

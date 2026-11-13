@@ -12,6 +12,8 @@
   // switch per-branch previews off again. Pin them on.
   "preview_urls": true,
   "observability": { "enabled": true },
+  // Lets Cloudflare cache Worker responses that ask for it (Astro route caching, see astro.config.mjs).
+  "cache": { "enabled": true },
   // Secrets (not in this file): CONTACT_TO, TURNSTILE_SECRET — set with `npx wrangler secret put <NAME>`
   "vars": {
     "CONTACT_FROM": "blog@karolnov.dev",
