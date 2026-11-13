@@ -8,6 +8,7 @@ draft: true
 
 import ClipPlayground from '../../components/sync/ClipPlayground.astro';
 import SeriesNav from '../../components/SeriesNav.astro';
+import SchemaTree from '../../components/sync/SchemaTree.astro';
 
 [Part one](/blog/before-you-build-a-sync-engine/) ended on a warning. A CRDT guarantees that every copy of the
 document *converges*: they all end up the same. It says nothing about whether the thing they all agree on makes
@@ -27,10 +28,11 @@ any order, any number of times, and every copy lands on the same state. No copy 
 which version to keep.
 
 To keep that promise, a CRDT needs a rule for every pair of concurrent changes, and it needs every copy to apply
-the same rule. For the fields of a record, the usual rule is **last write wins, per key**. Each write carries a
-timestamp (a logical clock, plus the client id to break ties), and the newest write to a key wins. That's how a
-`Y.Map` merges, how Liveblocks' `LiveObject` merges, and roughly how
-[Figma merges properties](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/).
+the same rule. For the fields of a record, the usual rule is **last write wins, per key**. Each key keeps one
+value, and when two people write it at the same time, a fixed rule picks the winner the same way on every copy. A
+`Y.Map` takes the write from the higher client id. Liveblocks' `LiveObject` and
+[Figma's properties](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/) take whichever write
+reached the server last.
 
 It's a good rule. It's simple, it's predictable, and two people rarely edit the same field at the same moment. The
 problem is the word *per*. The rule looks at one key at a time. Your app doesn't.
@@ -43,16 +45,17 @@ Picture a video editor. A clip on the timeline has a point where it starts (`in`
 ```ts
 const clip = doc.getMap('clip');
 clip.set('in', 2);
-clip.set('out', 8);
+clip.set('out', 9);
 ```
 
-Alice drags the whole clip five seconds to the right, so her client writes `in: 7` and `out: 13`. At the same time,
-Bob drags the clip's end three seconds to the left, so his client writes `out: 5`. Each of them made a perfectly
+Alice drags the whole clip five seconds to the right, so her client writes `in: 7` and `out: 14`. At the same time,
+Bob drags the clip's end four seconds to the left, so his client writes `out: 5`. Each of them made a perfectly
 valid edit. Press **Move + trim** and watch what the merge makes of it:
 
 <ClipPlayground mode="inOut">
   Under each copy are the fields it's stored as, with the stamp of the write that won (`1·A` is Alice's first
-  write). Alice's `in` and Bob's `out` both win their key, so the clip ends up running from 7s to 5s. Try
+  write; the demo orders writes with a Lamport clock, standing in for whichever rule your library uses). Alice's
+  `in` and Bob's `out` both win their key, so the clip ends up running from 7s to 5s. Try
   **Trim both ends** too, or drag the clips yourself; take one client offline to make the overlap as long as you
   like.
 </ClipPlayground>
@@ -73,7 +76,7 @@ If the problem is that last-write-wins splits two values that belong together, t
 them. Store the range as one value, and the merge has to take all of it or none of it:
 
 ```ts
-clip.set('range', { in: 7, out: 13 }); // a plain object in a Y.Map is one value, merged as a unit
+clip.set('range', { in: 7, out: 14 }); // a plain object in a Y.Map is one value, merged as a unit
 ```
 
 <ClipPlayground mode="whole">
@@ -84,8 +87,8 @@ clip.set('range', { in: 7, out: 13 }); // a plain object in a Y.Map is one value
 That's valid, and it's also wrong in a quieter way: one person's work disappears. Make the value bigger and you
 make conflicts more likely, all the way up to "send the whole document", which is where
 [part one started](/blog/before-you-build-a-sync-engine/#attempt-one-send-the-whole-thing). Make it smaller and
-you're back to negative clips. You want values that are **as small as possible, and no smaller**. On Flex, when
-values have to stay consistent with each other, they usually end up in a single attribute. Losing one of two
+you're back to negative clips. You want values that are **as small as possible, and no smaller**. When values have
+to stay consistent with each other, I'd lean towards keeping them in a single attribute. Losing one of two
 concurrent edits is a price people barely notice. A broken element they notice straight away.
 
 Before you merge values into one, ask a different question: what do people actually change on their own? Nobody
@@ -95,13 +98,13 @@ touches exactly one field:
 
 ```ts
 clip.set('start', 2);
-clip.set('length', 6);
+clip.set('length', 7);
 ```
 
 <ClipPlayground mode="startLength">
   **Move + trim** now merges the way both people meant it: Alice's move writes `start`, Bob's trim writes `length`,
   and the clip ends up at 7s–10s. Then try **Trim both ends**. Trimming the start changes both fields, so the two
-  edits collide on `length` again. The result is valid, but Bob's end lands at 9s, where neither of them put it.
+  edits collide on `length` again. The result is valid, but Bob's end lands at 10s, where neither of them put it.
 </ClipPlayground>
 
 Same data, same CRDT, different shape, and the most common conflict is gone. That's the cheapest fix in this whole
@@ -113,15 +116,13 @@ For those, you need somewhere to repair what the merge produced.
 
 ## Let the server repair the merge
 
-This is how Flex works. Clients write straight into their local Yjs document, and a provider syncs the changes to
-the server, as with any Yjs setup. After an update from a client arrives, the server can run a normaliser over the
-parts of the document it touched. The normaliser makes sure the document is in a valid state, and where it isn't,
-fixes it. The fix is an ordinary write to the same document, so it syncs back to every client like any other
-change.
+Clients write straight into their local Yjs document, and a provider syncs the changes to the server, as with any
+Yjs setup. After an update from a client arrives, the server can run a normaliser over the parts of the document
+it touched. The normaliser makes sure the document is in a valid state, and where it isn't, fixes it. The fix is
+an ordinary write to the same document, so it syncs back to every client like any other change.
 
-The rules are blunt on purpose. On Flex, an element that ends up with a negative width just gets a width of 0. In
-this demo, a clip that ends before it starts is pushed out to the shortest length the app allows, and keeps where
-it starts:
+The rules should be blunt. An element that ends up with a negative width just gets a width of 0. A clip that ends
+before it starts is pushed out to the shortest length the app allows, and keeps where it starts:
 
 ```ts
 function normaliseClip(clip: Y.Map<number>) {
@@ -132,13 +133,17 @@ function normaliseClip(clip: Y.Map<number>) {
 
 <ClipPlayground mode="normalise">
   The same two fields as the first demo, but the server checks every merge. When Alice's move lands on top of Bob's
-  trim, it writes `out` back as 8s (stamped `·S`) and sends the fix to both clients. Watch the clients, though: each
+  trim, it writes `out` back as 9s (stamped `·S`) and sends the fix to both clients. Watch the clients, though: each
   one shows the broken clip until the fix arrives. Turn on **fix on read** to hide that gap.
 </ClipPlayground>
 
-A real example from Flex. Elements have a position mode, `static`, `absolute` or `fixed`, and separately an `x` and
-a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. Now picture a client working
-from a stale copy of the document. Someone else has already switched an element to static, but this client hasn't
+This works, but for a clip it's the wrong tool. A clip is two numbers on one line, and the shape fix from earlier
+already makes most of these conflicts disappear. Repairs earn their place in a model that's already stored and
+shipped, where changing the shape is expensive, and in rules no shape can keep.
+
+Take another example, from a design tool. Elements have a position mode, `static`, `absolute` or `fixed`, and
+separately an `x` and a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. Now
+picture a client working from a stale copy of the document. Someone else has already switched an element to static, but this client hasn't
 seen that yet, so it moves the element and writes `x` and `y`. Each key merges fine on its own, and the result is a
 static element with coordinates it shouldn't have. The normaliser rejects that write: after the update is merged,
 it removes the coordinates a static element can't have, and the document is valid again.
@@ -203,9 +208,9 @@ data, the server's normaliser, the read fix and a UI that survives what gets pas
 
 ## Going further: send intents, not values
 
-There's one more step, and it's the one Linear and [Replicache](https://doc.replicache.dev/concepts/how-it-works)
-take. We don't on Flex. Look at what went over the wire in every demo so far: `out 5s`. That's a value, the
-*result* of what Bob did, worked out against the clip as he saw it. What Bob did was "drag the end three seconds
+There's one more step, and it's the one [Replicache](https://doc.replicache.dev/concepts/how-it-works) takes.
+Look at what went over the wire in every demo so far: `out 5s`. That's a value, the
+*result* of what Bob did, worked out against the clip as he saw it. What Bob did was "drag the end four seconds
 left". If that's what you send, the server can apply it to the clip as it is *now*, after Alice's move:
 
 ```ts
@@ -227,7 +232,7 @@ show the server's latest state with their own unconfirmed operations replayed on
 Edits merge closer to what people meant, and nothing invalid is ever stored, not even for a moment. The cost is
 that you've left the CRDT's model behind. Every client edit becomes an operation you define, version and replay,
 and offline edits need a server to make sense of them. For a canvas where most edits are "set this property",
-writing values and repairing on the server gets you most of the way for much less work. That's the trade we made.
+writing values and repairing on the server gets you most of the way for much less work.
 
 ## The shape you pick now decides what you can add later
 
@@ -245,15 +250,26 @@ later either fits the shape you picked or fights it.
 - **New editors.** AI agents writing into the same document go through the same repairs as people. A shape where
   invalid states can't be stored is the cheapest guardrail you'll ever give an agent.
 - **New ways to edit.** If you'll need permissions on actions ("reviewers can trim but not move"), ripple edits, or
-  undo that knows a trim happened rather than that `out` changed, those push you towards intents. Undo is
-  [part five](#series).
+  undo that knows a trim happened rather than that `out` changed, those push you towards intents.
 
 None of these is impossible with the wrong shape. Each one is harder, and each one adds another place where a
 merge can break a rule.
 
-## Before you write any sync code
+## Before you settle on a document schema
 
-Questions I'd ask about a data model, in this order:
+I would start by drawing the schema as a tree. Put each record at the root, each field it stores at a leaf, and
+nest values that only make sense together under one branch. Then list the rules your app depends on and see which
+fields each one touches.
+
+<SchemaTree>
+  A rule that lands inside one branch can be kept by storing that
+  branch as one value. A rule that reaches across branches can break in a merge, and one that reaches into another
+  record can only be checked on the server.
+</SchemaTree>
+
+The tree makes the groups visible. Fields under one branch tend to share rules, and a rule that has to reach across
+branches shows you either a grouping that's off or a check that belongs on the server. Then go through these
+questions, in this order:
 
 1. **Which rules span more than one field?** List them. Start and end, a mode and the fields only one mode uses,
    totals and the items they total. Each one is a place a per-field merge can break.

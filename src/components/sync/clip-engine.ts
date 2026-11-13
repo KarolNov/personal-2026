@@ -10,7 +10,7 @@ export const CLIENTS: ClientId[] = ['alice', 'bob'];
 
 export const TRACK = 20;
 /** The shortest clip the app allows. Each client respects it locally; only merges break it. */
-export const MIN = 1;
+export const MIN = 2;
 
 export type Clip = { in: number; out: number };
 
@@ -279,6 +279,6 @@ export type Mode = keyof typeof STRATEGIES;
 
 /** Two scripted situations, the same in every demo, so the models can be compared side by side. */
 export const SCENARIOS: Record<string, { label: string; alice: Gesture; bob: Gesture }> = {
-  moveTrim: { label: 'Move + trim', alice: { kind: 'move', by: 5 }, bob: { kind: 'trimEnd', by: -3 } },
-  trimBoth: { label: 'Trim both ends', alice: { kind: 'trimStart', by: 4 }, bob: { kind: 'trimEnd', by: -3 } },
+  moveTrim: { label: 'Move + trim', alice: { kind: 'move', by: 5 }, bob: { kind: 'trimEnd', by: -4 } },
+  trimBoth: { label: 'Trim both ends', alice: { kind: 'trimStart', by: 5 }, bob: { kind: 'trimEnd', by: -4 } },
 };
