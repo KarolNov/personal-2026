@@ -113,9 +113,10 @@ For those, you need somewhere to repair what the merge produced.
 
 ## Let the server repair the merge
 
-This is how Flex works. Clients write straight into their local Yjs document. A provider syncs the changes to the
-server, as with any Yjs setup. The server then checks the merged document, and where a write breaks a rule, it
-normalises it. The fix is an ordinary write to the same document, so it syncs back to every client like any other
+This is how Flex works. Clients write straight into their local Yjs document, and a provider syncs the changes to
+the server, as with any Yjs setup. After an update from a client arrives, the server can run a normaliser over the
+parts of the document it touched. The normaliser makes sure the document is in a valid state, and where it isn't,
+fixes it. The fix is an ordinary write to the same document, so it syncs back to every client like any other
 change.
 
 The rules are blunt on purpose. On Flex, an element that ends up with a negative width just gets a width of 0. In
@@ -135,61 +136,32 @@ function normaliseClip(clip: Y.Map<number>) {
   one shows the broken clip until the fix arrives. Turn on **fix on read** to hide that gap.
 </ClipPlayground>
 
+A real example from Flex. Elements have a position mode, `static`, `absolute` or `fixed`, and separately an `x` and
+a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. Now picture a client working
+from a stale copy of the document. Someone else has already switched an element to static, but this client hasn't
+seen that yet, so it moves the element and writes `x` and `y`. Each key merges fine on its own, and the result is a
+static element with coordinates it shouldn't have. The normaliser rejects that write: after the update is merged,
+it removes the coordinates a static element can't have, and the document is valid again.
+
+```ts
+function normalisePosition(el: Y.Map<unknown>) {
+  if (el.get('position') === 'static' && (el.has('x') || el.has('y'))) {
+    el.delete('x');
+    el.delete('y');
+  }
+}
+```
+
 Nothing here asks the clients to change how they write, and it works with any CRDT and any provider. It's also
 where rules that span records belong: two clips on the same track mustn't overlap, an element can't point at an
 image someone just deleted. No choice of fields on one record can protect a rule about two.
 
-The result isn't always what either person meant. Here, Bob's trim mostly disappears. But it's always valid, it's
-the same for everyone, and it can't be skipped by a client that's buggy or out of date. Keep the rules
-**deterministic and idempotent**: running the fix twice, or on two servers, must give the same document.
+The result isn't always what either person meant. In the demo, Bob's trim mostly disappears; in the position
+example, the move is thrown away. But it's always valid, it's the same for everyone, and it can't be skipped by a
+client that's buggy or out of date. Keep the rules **deterministic and idempotent**: running the normaliser twice,
+or on two servers, must give the same document.
 
-## Fix on read for what slips through
-
-Server repairs take a round trip. Until the fix arrives, each client is looking at the broken merge, and a
-renderer that assumes a positive length can throw. Documents written before a rule existed don't have the fix at
-all. So every reader repairs the same way, before the app sees the data.
-
-A real example from Flex. Elements have a position mode, `static`, `absolute` or `fixed`, and separately an `x` and
-a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. They were stored as separate
-keys, so nothing stops a document from ending up with a static element that still has coordinates. For example,
-one person switches the element to static while another person drags it. If the rest of the app trusted those
-coordinates, the element would jump. So when we read an element in an invalid state, we ignore the coordinates it
-doesn't need, and delete them from the document so the invalid state doesn't stick around:
-
-```ts
-function readPosition(el: Y.Map<unknown>): Position {
-  const mode = (el.get('position') as Mode) ?? 'static';
-  if (mode === 'static') {
-    if (el.has('x') || el.has('y')) {
-      // Clean up as well as ignore. Deleting a key twice is harmless, so it doesn't matter
-      // how many clients notice the same problem at once.
-      el.doc!.transact(() => {
-        el.delete('x');
-        el.delete('y');
-      });
-    }
-    return { mode };
-  }
-  return { mode, x: (el.get('x') as number) ?? 0, y: (el.get('y') as number) ?? 0 };
-}
-```
-
-A read fix that writes back has one more rule to follow: every client that sees the problem will make the same
-write at the same time, so the write has to be safe to repeat. Deleting a key is. Something like "add 10 to `x`"
-isn't.
-
-The repair has the same rule as the server's: every client, on every version, must produce the same result from
-the same stored state, or you've built a new way for copies to disagree. Keep the repair rules few and boring, and
-write them down next to the schema. Fix-on-read is also your safety net when validation has a bug. Stored data
-outlives the code that wrote it.
-
-And assume the read fix will miss something too. Build the UI so that one bad value can't take the whole document
-down with it. Clamp a negative width to 0 where you draw it, fall back to a default when a value is missing or the
-wrong type, and wrap each element in its own error boundary so a broken one renders as a placeholder instead of
-blanking the canvas. None of these layers has to be perfect, because there are several of them: the shape of the
-data, the server's repair, the read fix and a UI that survives what gets past all three.
-
-Look at the position example again, though. That fix exists because of a modelling choice. Had position been one
+Look at the position example again, though. That rule exists because of a modelling choice. Had position been one
 value, shaped differently per mode, the invalid state couldn't be stored in the first place:
 
 ```ts
@@ -200,8 +172,34 @@ type Position =
 el.set('position', { mode: 'absolute', x: 40, y: 120 });
 ```
 
-A concurrent mode switch and drag would collide on one value and one would win. For dragging an element that's
-about to stop being draggable, that's the right outcome.
+The stale move and the switch to static would collide on one value, and one would win. For moving an element that's
+about to stop being movable, that's the right outcome, and there's no rule to write.
+
+## Fix on read for what slips through
+
+Server repairs take a round trip. Until the fix arrives, each client is looking at the broken merge, and a
+renderer that assumes a positive length can throw. Documents written before a rule existed won't have been
+repaired at all. So before the app sees the data, each client reads it through the same rules, without writing
+anything back. That's what the **fix on read** toggle in the demo above does.
+
+```ts
+function readClip(clip: Y.Map<number>): Clip {
+  const start = clip.get('in') ?? 0;
+  const end = Math.max(clip.get('out') ?? start, start + MIN_LENGTH);
+  return { in: start, out: end };
+}
+```
+
+The read fix has to agree with the server's: every client, on every version, must produce the same result from the
+same stored state, or you've built a new way for copies to disagree. Keep the rules few and boring, and write them
+down next to the schema. Reading through them is also your safety net when the normaliser has a bug. Stored data
+outlives the code that wrote it.
+
+And assume the read fix will miss something too. Build the UI so that one bad value can't take the whole document
+down with it. Clamp a negative width to 0 where you draw it, fall back to a default when a value is missing or the
+wrong type, and wrap each element in its own error boundary so a broken one renders as a placeholder instead of
+blanking the canvas. None of these layers has to be perfect, because there are several of them: the shape of the
+data, the server's normaliser, the read fix and a UI that survives what gets past all three.
 
 ## Going further: send intents, not values
 
@@ -238,8 +236,8 @@ later either fits the shape you picked or fights it.
 
 - **New variants.** Say the product asks for `sticky` positioning, with its own offset. With position as one value
   shaped per mode, `sticky` is a new variant with its own fields, and the merge already treats it as a unit. With
-  `position`, `x` and `y` as separate keys, it's another mode that leaves fields behind, and another case for every
-  read fix.
+  `position`, `x` and `y` as separate keys, it's another mode that leaves fields behind, and another case for the
+  normaliser.
 - **New properties.** `start` and `length` can take a playback speed later without changing meaning. `in` and `out`
   start arguing with it the moment someone asks whether `out` is in source time or timeline time.
 - **New rules.** With repairs in one place on the server, a new rule is a new check. Old documents get fixed the
