@@ -13,12 +13,14 @@ const TITLES: Record<Mode, string> = {
   inOut: 'Two fields, last write wins each',
   whole: 'One value for the whole range',
   startLength: 'Start and length',
+  normalise: 'Two fields, repaired by the server',
   intent: 'Send what the person did',
 };
 const SERVER_NOTE: Record<Mode, string> = {
   inOut: 'relays + stores',
   whole: 'relays + stores',
   startLength: 'relays + stores',
+  normalise: 'relays + repairs',
   intent: 'orders + validates',
 };
 const PEERS = [
@@ -84,6 +86,12 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
       <input type="range" min="200" max="3000" step="100" value="1400" data-latency />
       <output data-latency-out>1.4s</output>
     </label>
+    {mode === 'normalise' && (
+      <label class="toggle">
+        <input type="checkbox" data-fix-on-read />
+        <span>fix on read</span>
+      </label>
+    )}
     <span class="status" data-status>In sync</span>
   </div>
   <figcaption><slot /></figcaption>
@@ -240,6 +248,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
   .fields :global(.field i) { font-style: normal; font-size: 0.62rem; color: var(--muted); }
   .fields :global(.field.alice) { --c: var(--alice); }
   .fields :global(.field.bob) { --c: var(--bob); }
+  .fields :global(.field.server) { --c: var(--muted); }
   .fields :global(.field.pending) { border-bottom-style: dashed; opacity: 0.8; }
   .fields :global(.field.new) { animation: pop 320ms var(--ease-out); }
 
@@ -314,7 +323,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
 
 <script>
   import {
-    STRATEGIES, SCENARIOS, CLIENTS, TRACK, apply, fmt, valid,
+    STRATEGIES, SCENARIOS, CLIENTS, TRACK, apply, fmt, repair, valid,
     type Clip, type ClientId, type Gesture, type Message, type Mode, type Replica, type Strategy,
   } from './clip-engine';
 
@@ -339,6 +348,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     const latencyInput = root.querySelector<HTMLInputElement>('[data-latency]')!;
     const latencyOut = root.querySelector<HTMLOutputElement>('[data-latency-out]')!;
     const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-play]')];
+    const fixOnRead = root.querySelector<HTMLInputElement>('[data-fix-on-read]');
 
     const view = (el: HTMLElement) => ({
       el,
@@ -398,7 +408,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
         const arrive = Math.max(t + latency, (lastArrival[key] ?? 0) + GAP);
         lastArrival[key] = arrive;
         const sender = dir === 'up' ? client : msg.from ?? otherOf(client);
-        fly(client, dir, msg, sender, arrive - t, batch.length, batch.every((m) => m.ack));
+        fly(client, dir, msg, sender, arrive - t, batch.length, batch.every((m) => m.ack || m.fix));
         inFlight++;
         setTimeout(() => {
           if (gen !== generation) return;
@@ -463,7 +473,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     function onClient(who: ClientId, msg: Message) {
       const { out } = strategy.clientReceive(who, msg);
       render(who);
-      if (!msg.ack && msg.from) flash(views[who].el, msg.from);
+      if (!msg.ack && !msg.fix && msg.from) flash(views[who].el, msg.from);
       for (const m of out) send(who, 'up', m);
     }
 
@@ -476,10 +486,16 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     }
 
     // ---- Drawing one copy: the clip on its track, and the fields it's stored as. ----
+    // With "fix on read" on, clients draw the repaired clip; the stored fields stay as they are.
+    const shown = (who: Replica) => {
+      const c = strategy.clip(who);
+      return who !== 'server' && fixOnRead?.checked ? repair(c) : c;
+    };
+
     function render(who: Replica) {
       const v = views[who];
       const drag = who === 'server' ? undefined : drags[who];
-      const c = drag?.preview ?? strategy.clip(who);
+      const c = drag?.preview ?? shown(who);
       const broken = c.out < c.in;
       const from = Math.min(c.in, c.out);
       v.clip.style.setProperty('--from', String(from / TRACK));
@@ -526,7 +542,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
         peers[id].wire.classList.toggle('offline', offline);
       }
       const pending = inFlight + CLIENTS.reduce((n, c) => n + queues[c].up.length + queues[c].down.length, 0);
-      const copies = (['alice', 'bob', 'server'] as Replica[]).map((r) => strategy.clip(r));
+      const copies = (['alice', 'bob', 'server'] as Replica[]).map(shown);
       const same = new Set(copies.map((c) => `${c.in}/${c.out}`)).size === 1;
       status.className = 'status';
       if (pending) status.textContent = 'Syncing…';
@@ -554,7 +570,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     }
 
     function startDrag(who: ClientId, kind: Gesture['kind'], x: number) {
-      const base = strategy.clip(who);
+      const base = shown(who);
       drags[who] = { kind, base, preview: base, x };
       views[who].timeline.classList.add('dragging');
     }
@@ -592,7 +608,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
         e.preventDefault();
         const handle = (e.target as HTMLElement).closest<HTMLElement>('[data-handle]');
         const kind = (handle?.dataset.handle as Gesture['kind']) ?? 'move';
-        const base = strategy.clip(id);
+        const base = shown(id);
         commit(id, gestureFor(kind, base, apply(base, { kind, by: dir * STEP }).clip));
       });
       peers[id].online.addEventListener('change', () => {
@@ -643,7 +659,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
 
     // ---- Scripted scenarios: both people drag at the same moment, as if by hand. ----
     async function drag(who: ClientId, g: Gesture, gen: number) {
-      const base = strategy.clip(who);
+      const base = shown(who);
       drags[who] = { kind: g.kind, base, preview: base, x: 0 };
       views[who].timeline.classList.add('dragging');
       const steps = Math.abs(g.by) / STEP;
@@ -672,6 +688,10 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     latencyInput.addEventListener('input', () => {
       latency = Number(latencyInput.value);
       latencyOut.value = `${(latency / 1000).toFixed(1)}s`;
+    });
+    fixOnRead?.addEventListener('change', () => {
+      CLIENTS.forEach(render);
+      refresh();
     });
     root.querySelector('[data-reset]')!.addEventListener('click', reset);
     for (const b of buttons) b.addEventListener('click', () => play(b.dataset.play!));

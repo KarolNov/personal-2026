@@ -18,10 +18,11 @@ export type Clip = { in: number; out: number };
 export type Gesture = { kind: 'move' | 'trimStart' | 'trimEnd'; by: number };
 
 export type LogEntry = { by: ClientId; text: string; changed?: boolean };
-export type Message = { label: string; ack?: boolean; from?: ClientId; payload: unknown };
+/** `fix` marks a correction the server made itself, drawn in grey like an ack. */
+export type Message = { label: string; ack?: boolean; fix?: boolean; from?: ClientId; payload: unknown };
 
 /** One stored field, as the playground draws it under each copy. */
-export type Field = { key: string; value: string; stamp?: string; by?: ClientId; pending?: boolean };
+export type Field = { key: string; value: string; stamp?: string; by?: ClientId | 'server'; pending?: boolean };
 
 export interface Strategy {
   clip(who: Replica): Clip;
@@ -38,6 +39,12 @@ const round = (n: number) => Math.round(n * 2) / 2;
 export const fmt = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}s`;
 const signed = (n: number) => `${n >= 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 export const valid = (c: Clip) => c.out - c.in >= MIN - 1e-9 && c.in >= 0 && c.out <= TRACK;
+
+/**
+ * The one repair rule: a clip that ends too early is pushed out to the minimum length, keeping
+ * where it starts. Deterministic, so the server and every reader that applies it agree.
+ */
+export const repair = (c: Clip): Clip => (c.out - c.in >= MIN ? c : { in: c.in, out: round(c.in + MIN) });
 
 /**
  * Apply a gesture to a clip and keep the result valid: no shorter than MIN, inside the track.
@@ -68,9 +75,9 @@ const describe = (g: Gesture) =>
 // record. Each write carries a Lamport clock; the higher clock wins, and a tie goes to the higher
 // client id. Every copy applies the same rule, so every copy converges — whatever the values mean.
 
-type Stamp = { clock: number; by: ClientId | 'seed' };
+type Stamp = { clock: number; by: ClientId | 'seed' | 'server' };
 type Register<V> = { value: V; stamp: Stamp };
-const RANK = { seed: 0, alice: 1, bob: 2 };
+const RANK = { seed: 0, alice: 1, bob: 2, server: 3 };
 const newer = (a: Stamp, b: Stamp) => a.clock > b.clock || (a.clock === b.clock && RANK[a.by] > RANK[b.by]);
 
 /** How a record-shaped data model maps a clip to stored keys and back. */
@@ -78,6 +85,8 @@ interface Shape<R extends Record<string, unknown>> {
   toRecord(c: Clip): R;
   toClip(r: R): Clip;
   show(key: keyof R & string, value: R[keyof R]): string;
+  /** If set, the server checks the merged record after every write and writes back a repair. */
+  fix?(r: R): Partial<R> | null;
 }
 
 function lww<R extends Record<string, unknown>>(shape: Shape<R>, initial: Clip): Strategy {
@@ -137,13 +146,25 @@ function lww<R extends Record<string, unknown>>(shape: Shape<R>, initial: Clip):
     serverReceive(from, msg) {
       const writes = msg.payload as Write[];
       const won = integrate(docs.server, writes);
-      const text =
+      let text =
         won === writes.length
           ? `${NAME[from]}: ${label(writes)} stored`
           : won === 0
             ? `${NAME[from]}: ${label(writes)} lost to a newer write`
             : `${NAME[from]}: kept ${won} of ${writes.length} fields`;
-      return { log: { by: from, text, changed: !valid(shape.toClip(record(docs.server))) }, out: [{ to: other(from), msg }] };
+      const out: { to: ClientId; msg: Message }[] = [{ to: other(from), msg }];
+      const patch = shape.fix?.(record(docs.server));
+      if (patch) {
+        // The repair is an ordinary write, stamped newer than anything it has seen, so it wins
+        // the merge everywhere and syncs back to both clients like any other change.
+        const clock = docs.server.clock + 1;
+        const fixes: Write[] = Object.entries(patch).map(([key, value]) => ({ key, value, stamp: { clock, by: 'server' } }));
+        integrate(docs.server, fixes);
+        text = `${text} → fixed ${label(fixes)}`;
+        const fixMsg: Message = { label: `fix ${label(fixes)}`, fix: true, payload: fixes };
+        out.push({ to: from, msg: fixMsg }, { to: other(from), msg: fixMsg });
+      }
+      return { log: { by: from, text, changed: !!patch || !valid(shape.toClip(record(docs.server))) }, out };
     },
     clientReceive(who, msg) {
       integrate(docs[who], msg.payload as Write[]);
@@ -156,6 +177,21 @@ function lww<R extends Record<string, unknown>>(shape: Shape<R>, initial: Clip):
 export const inOut = (initial: Clip) =>
   lww<{ in: number; out: number }>(
     { toRecord: (c) => ({ in: c.in, out: c.out }), toClip: (r) => r, show: (_k, v) => fmt(v) },
+    initial,
+  );
+
+/** The same two keys, plus a server that repairs the merged record before anyone builds on it. */
+export const normalise = (initial: Clip) =>
+  lww<{ in: number; out: number }>(
+    {
+      toRecord: (c) => ({ in: c.in, out: c.out }),
+      toClip: (r) => r,
+      show: (_k, v) => fmt(v),
+      fix: (r) => {
+        const fixed = repair(r);
+        return fixed.out !== r.out ? { out: fixed.out } : null;
+      },
+    },
     initial,
   );
 
@@ -238,7 +274,7 @@ export function intent(initial: Clip): Strategy {
   };
 }
 
-export const STRATEGIES = { inOut, whole, startLength, intent };
+export const STRATEGIES = { inOut, whole, startLength, normalise, intent };
 export type Mode = keyof typeof STRATEGIES;
 
 /** Two scripted situations, the same in every demo, so the models can be compared side by side. */
