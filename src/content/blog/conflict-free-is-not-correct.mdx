@@ -153,16 +153,30 @@ A real example from Flex. Elements have a position mode, `static`, `absolute` or
 a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. They were stored as separate
 keys, so nothing stops a document from ending up with a static element that still has coordinates. For example,
 one person switches the element to static while another person drags it. If the rest of the app trusted those
-coordinates, the element would jump. So when we read an element in an invalid state, we drop the coordinates it
-doesn't need:
+coordinates, the element would jump. So when we read an element in an invalid state, we ignore the coordinates it
+doesn't need, and delete them from the document so the invalid state doesn't stick around:
 
 ```ts
 function readPosition(el: Y.Map<unknown>): Position {
   const mode = (el.get('position') as Mode) ?? 'static';
-  if (mode === 'static') return { mode }; // any x and y left behind are ignored
+  if (mode === 'static') {
+    if (el.has('x') || el.has('y')) {
+      // Clean up as well as ignore. Deleting a key twice is harmless, so it doesn't matter
+      // how many clients notice the same problem at once.
+      el.doc!.transact(() => {
+        el.delete('x');
+        el.delete('y');
+      });
+    }
+    return { mode };
+  }
   return { mode, x: (el.get('x') as number) ?? 0, y: (el.get('y') as number) ?? 0 };
 }
 ```
+
+A read fix that writes back has one more rule to follow: every client that sees the problem will make the same
+write at the same time, so the write has to be safe to repeat. Deleting a key is. Something like "add 10 to `x`"
+isn't.
 
 The repair has the same rule as the server's: every client, on every version, must produce the same result from
 the same stored state, or you've built a new way for copies to disagree. Keep the repair rules few and boring, and
