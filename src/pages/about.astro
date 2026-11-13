@@ -107,6 +107,10 @@ const roles = [
       properly and stand behind what ships.
     </p>
     {/* A stable wrapper for the ball to stop at: the island swaps the graph inside it. */}
+    {/* Greys the graph out before it paints, for the scroll ball to wake (src/scripts/scroll-ball.ts). */}
+    <script is:inline>
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('graph-asleep');
+    </script>
     <div class="graph">
       <LiveContributionGraph server:defer login={github}>
         {contributions && <ContributionGraph slot="fallback" calendar={contributions} login={github} />}

@@ -13,24 +13,10 @@ export type ContributionCalendar = {
   weeks: ContributionDay[][];
 };
 
-// The page is cached at Cloudflare's edge (see src/pages/about.astro); this only saves a refetch
-// when a Worker isolate renders it more than once in a short span, and keeps dev reloads quick.
-// Failures aren't kept, so the next render tries again.
-const FRESH_MS = 10 * 60 * 1000;
-let cached: { at: number; data: Promise<ContributionCalendar | null> } | undefined;
-
-export function getContributions(login: string): Promise<ContributionCalendar | null> {
-  if (!cached || Date.now() - cached.at > FRESH_MS) {
-    const data = load(login);
-    cached = { at: Date.now(), data };
-    data.then((result) => {
-      if (!result && cached?.data === data) cached = undefined;
-    });
-  }
-  return cached.data;
-}
-
-async function load(login: string): Promise<ContributionCalendar | null> {
+// Not cached here: the live graph is cached at Cloudflare's edge (Astro.cache.set in
+// src/components/LiveContributionGraph.astro), and a promise shared between Worker requests
+// could hang one request when another is cancelled.
+export async function getContributions(login: string): Promise<ContributionCalendar | null> {
   try {
     const res = await fetch(`https://github.com/users/${login}/contributions`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (personal site build)' },

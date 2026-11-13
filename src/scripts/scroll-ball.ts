@@ -21,16 +21,19 @@ export function initScrollBall() {
     // heading and the contribution graph, in page order, and finally the "Get in touch" button.
     // A stop's zone is the stretch of page it belongs to; the ball arrives as the zone reaches the
     // reading line.
-    const stops = [
+    // The graph only counts once it's there, so the list is rebuilt when the graph arrives.
+    const buildStops = () => [
       ...roles.map((role) => ({ el: role.querySelector<HTMLElement>('.role-head')!, zone: role })),
-      ...[
-        ...[...main.querySelectorAll<HTMLElement>('section h2')]
-          .filter((h2) => !h2.closest('section')!.contains(timeline) && !h2.closest('section')!.contains(touch))
-          .map((h2) => ({ el: h2, zone: h2.closest('section')! })),
-        ...(graph?.querySelector('.contributions') ? [{ el: graph, zone: graph }] : []),
-      ].sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)),
+      ...[...main.querySelectorAll<HTMLElement>('section h2, .graph')]
+        .filter((el) => el !== graph || el.querySelector('.contributions'))
+        .filter((el) => !el.closest('section')!.contains(timeline) && !el.closest('section')!.contains(touch))
+        .map((el) => ({ el, zone: el === graph ? el : el.closest('section')! })),
       { el: touch, zone: touch },
     ];
+    let stops = buildStops();
+    let graphStop = stops.findIndex((s) => s.el === graph);
+    // The reading line as last worked out by target().
+    let lastLine = 0;
     const dot = ball.offsetWidth;
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const TRAIL_MS = 320;
@@ -200,6 +203,7 @@ export function initScrollBall() {
       if (scrollY < 16) return shape(title!);
 
       const y = readingLine();
+      lastLine = y;
       const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
 
@@ -271,12 +275,15 @@ export function initScrollBall() {
     const ROW_MS = 60;
     let woken = false;
     let figure: HTMLElement | null = null;
-    // Picks up the graph, again whenever the live copy replaces the one built with the page.
+    // Picks up the graph, again whenever the live copy replaces the one built with the page (or
+    // arrives when the build had none, which also makes it a stop).
     function syncGraph() {
       const current = graph?.querySelector<HTMLElement>('.contributions') ?? null;
       if (current === figure) return;
       figure = current;
-      figure?.classList.toggle('asleep', !woken && !reduceMotion.matches);
+      figure?.classList.toggle('awake', woken);
+      stops = buildStops();
+      graphStop = stops.findIndex((s) => s.el === graph);
     }
     function wake() {
       if (woken || !figure) return;
@@ -293,14 +300,13 @@ export function initScrollBall() {
           day.style.setProperty('--delay', `${Math.round((i / weeks.length) * WAKE_MS + fromMiddle * ROW_MS)}ms`);
         }
       });
-      fig.classList.add('waking');
-      fig.classList.remove('asleep');
+      fig.classList.add('waking', 'awake');
       // Afterwards colour changes (e.g. the theme) are instant again.
       setTimeout(() => fig.classList.remove('waking'), WAKE_MS + 3 * ROW_MS + 600);
     }
     // Reduced motion leaves the graph awake from the start.
     reduceMotion.addEventListener('change', () => {
-      if (reduceMotion.matches) figure?.classList.remove('asleep');
+      if (reduceMotion.matches) document.documentElement.classList.remove('graph-asleep');
     });
 
     function render() {
@@ -501,9 +507,9 @@ export function initScrollBall() {
 
     // Scrolled past the graph without the ball stopping there (it moved on to the next stop, or
     // the scroll was too quick to land): it wakes anyway, as soon as it's on screen.
-    const graphStop = stops.findIndex((s) => s.el === graph);
+    // Uses the reading line target() just worked out, rather than working it out again.
     function wakeIfPassed() {
-      if (woken || graphStop < 0 || !figure || scrollY < 16 || readingLine() < hold(graphStop)) return;
+      if (woken || graphStop < 0 || !figure || scrollY < 16 || lastLine < hold(graphStop)) return;
       const { top, bottom } = figure.getBoundingClientRect();
       if (bottom > 0 && top < innerHeight) wake();
     }
@@ -554,8 +560,10 @@ export function initScrollBall() {
       lineBox = goal;
       pending = null;
       render();
-      ball!.style.opacity = line ? '1' : '0';
-      if (line && changed) ball!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+      // The graph stop is only a round ball at its edge, so it stays hidden there too.
+      const shown = line && line !== graph;
+      ball!.style.opacity = shown ? '1' : '0';
+      if (shown && changed) ball!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
     }
 
     render();
@@ -593,5 +601,8 @@ export function initScrollBall() {
     new ResizeObserver(resize).observe(main);
     if (graph) new MutationObserver(resize).observe(graph, { childList: true, subtree: true });
     resize();
+  } else {
+    // No ball to wake the graph: don't leave it greyed out.
+    document.documentElement.classList.remove('graph-asleep');
   }
 }
