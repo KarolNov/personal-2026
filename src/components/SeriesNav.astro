@@ -18,14 +18,20 @@ const index = SYNC_SERIES.parts.findIndex((p) => p.slug === current);
     {SYNC_SERIES.name} · part {index + 1} of {SYNC_SERIES.parts.length}
   </p>
   <ol>
-    {SYNC_SERIES.parts.map((part) => (
-      <li class:list={{ current: part.slug === current }}>
+    {SYNC_SERIES.parts.map((part, i) => (
+      <li>
         {part.slug === current ? (
-          <span aria-current="page">{part.title}</span>
+          <span class="row current" aria-current="page">
+            <span class="num">{i + 1}.</span> {part.title}
+          </span>
         ) : published.has(part.slug) ? (
-          <a href={`/blog/${part.slug}/`}>{part.title}</a>
+          <a class="row" href={`/blog/${part.slug}/`}>
+            <span class="num">{i + 1}.</span> <span class="title">{part.title}</span>
+          </a>
         ) : (
-          <span class="soon">{part.title} <span class="muted">· coming soon</span></span>
+          <span class="row soon">
+            <span class="num">{i + 1}.</span> {part.title} · coming soon
+          </span>
         )}
       </li>
     ))}
@@ -41,10 +47,17 @@ const index = SYNC_SERIES.parts.findIndex((p) => p.slug === current);
     background: var(--surface);
   }
   .label { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  ol { margin: 0; padding-left: 1.4rem; }
+  /* The numbers live inside each row (not as list markers) so a linked part is a link
+     number and all. The <ol> still gives screen readers the list position. */
+  ol { margin: 0; padding: 0; list-style: none; }
   li { padding: 0.1rem 0; }
-  li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* The hanging indent lines a wrapped title up under the title (all parts are 1–9). */
+  .row { display: block; padding-left: 1.2em; text-indent: -1.2em; }
+  .num { font-variant-numeric: tabular-nums; }
+  /* A linked part is red number and all, but only the title is underlined. */
+  a.row { text-decoration: none; }
+  a.row .title { text-decoration: underline; text-underline-offset: 0.2em; }
+  a.row:hover .title { text-decoration-thickness: 2px; }
   .current { font-weight: 600; }
-  .current::marker { color: var(--accent); }
   .soon { color: var(--muted); }
 </style>
