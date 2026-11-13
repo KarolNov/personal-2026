@@ -228,6 +228,15 @@ const roles = [
     .touch:hover:not(.lit) { background: var(--accent-bg); }
   }
 
+  /* A year of days in the text column makes for tiny squares on a desktop, so where there's room the
+     graph widens past the column on both sides, centred on it (up to 56rem, keeping 2rem clear of
+     the screen edges). It never gets narrower than the column. */
+  .graph {
+    --wide: max(100%, min(56rem, 100vw - 4rem));
+    width: var(--wide);
+    margin-left: calc((100% - var(--wide)) / 2);
+  }
+
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
