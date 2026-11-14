@@ -157,11 +157,11 @@ const roles = [
   .lede { font-size: 1.2rem; color: var(--muted); }
   section { margin-top: 4.5rem; }
   h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It runs on a
-     track of straight lines: a rail down the left margin with a spur out to each stop. Parked at
-     the title or a heading it stretches into an underline; passing the contribution graph wakes
-     it; at the end it fills in the "Get in touch" button. The track is drawn faintly, and a
-     fading trail follows the ball along it. All of it sits behind the text. */
+  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It runs down a
+     rail in the left margin with a dot level with each stop. At the title or a heading it
+     stretches across into an underline; reaching the contribution graph wakes it; at the end it
+     fills in the "Get in touch" button. The rail and dots are drawn faintly, and a fading trail
+     follows the ball. All of it sits behind the text. */
   :global(main) { position: relative; }
   /* Nothing should scroll the page sideways. */
   :global(body) { overflow-x: clip; }
@@ -200,15 +200,10 @@ const roles = [
     background: var(--accent-bg);
     z-index: -1;
     pointer-events: none;
-    /* Driven by the script; opt out of the page entrance and start hidden until it's placed.
-       Shrinking back into a ball is quick; stretching into a highlight has a little bounce. */
+    /* Driven by the script, size included; opt out of the page entrance and start hidden until
+       it's placed. */
     animation: none;
     visibility: hidden;
-    transition: width 160ms var(--ease-out), height 160ms var(--ease-out);
-  }
-  .ball.parked {
-    transition-duration: 380ms;
-    transition-timing-function: cubic-bezier(0.34, 1.4, 0.64, 1);
   }
   /* The margin the ball rides in sits in the page's side padding, so role text lines up with
      the rest of the page and the ball never crosses it. Wider screens have room for more. */
@@ -270,7 +265,6 @@ const roles = [
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
-    .ball, .ball.parked { transition: none; }
   }
 </style>
 
