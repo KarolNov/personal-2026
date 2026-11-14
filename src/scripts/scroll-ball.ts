@@ -1,5 +1,6 @@
-// The red ball on the About page. It runs down a straight rail in the left margin, clear of the
-// text and the contribution graph, with a dot on the rail level with each stop: the title, each
+// The red ball on the About page. It runs down a straight rail in the left margin, just left of
+// the text, stepping out around the contribution graph where that reaches past the rail, with a dot
+// level with each stop: the title, each
 // role and section heading, the graph and the "Get in touch" button. Scrolling sets how far along
 // the track the ball should be, and it eases there, leaving a fading trail. At a heading or the
 // button it leaves the rail and stretches out across to become that stop's highlight (an
@@ -34,9 +35,10 @@ const LEAVE = 0.1;
 const RIDE = 120;
 // Near the bottom stops are pulled in so they all get a turn; each keeps at least this much scroll.
 const MIN_GAP = 160;
-// The rail keeps this far left of the text and of the graph.
+// The rail keeps this far left of the text, and of the graph where it steps out around it.
 const RAIL_GAP = 28;
-const GRAPH_GAP = 20;
+// The step around the graph passes this far above and below it.
+const GRAPH_GAP = 16;
 // ...and at least this far in from the screen's edge.
 const EDGE = 5;
 // The ball parks once it's this close to a stop, rather than crawling the last pixels.
@@ -46,7 +48,7 @@ const PARK_PX = 2;
 const NUDGE_PX = 16;
 const TRAIL_MS = 320;
 // The ball's spring along the track (critically damped: no overshoot).
-const STIFFNESS = 260;
+const STIFFNESS = 120;
 const DAMPING = 2 * Math.sqrt(STIFFNESS);
 
 export function initScrollBall() {
@@ -129,8 +131,9 @@ export function initScrollBall() {
   ];
 
   // Where the ball's left end sits at a stop (plus half a ball), and its size once parked there.
-  // At the graph it stays on the rail, level with the grid's middle row.
-  const spotOf = (el: HTMLElement, rail: number): Point & { w: number; h: number } => {
+  // At the graph it stays a ball, a little way out from the grid's left edge (or on the rail, if that's nearer
+  // the text), level with its middle row; `grid` is the grid's box, which the track steps around.
+  const spotOf = (el: HTMLElement, rail: number): Point & { w: number; h: number; grid?: Box } => {
     const b = box(el);
     if (el === touch) return { x: b.left + DOT / 2, y: b.top + b.height / 2, w: b.width, h: b.height };
     if (el === graph) {
@@ -140,7 +143,7 @@ export function initScrollBall() {
       const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
       const day = full?.querySelectorAll<HTMLElement>('.day')[3];
       const y = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
-      return { x: rail, y, w: DOT, h: DOT };
+      return { x: Math.min(rail, grid.left - RAIL_GAP), y, w: DOT, h: DOT, grid };
     }
     // Headings get an underline.
     const h = DOT * 0.6;
@@ -149,22 +152,19 @@ export function initScrollBall() {
 
   const build = () => {
     measureView();
-    // The rail runs left of both the text and the graph (which reaches past the text on wide
-    // screens), but never off the screen.
+    // The rail runs just left of the text, but never off the screen.
     const mainLeft = main.getBoundingClientRect().left;
-    const grid = graph?.querySelector<HTMLElement>('.grid');
-    const text = box(list).left;
-    const rail = Math.max(
-      Math.min(text - RAIL_GAP, grid ? box(grid).left - GRAPH_GAP : Infinity),
-      EDGE + DOT / 2 - mainLeft,
-    );
+    const minX = EDGE + DOT / 2 - mainLeft;
+    const rail = Math.max(box(list).left - RAIL_GAP, minX);
     const mainTop = main.getBoundingClientRect().top + scrollY;
 
     points = [];
     lengths = [];
     stops = [];
-    // The dot on the rail level with each stop.
-    const dots: number[] = [];
+    // The drawn track: the rail, and the step out around the graph (not the spurs to headings).
+    const drawn: Point[] = [];
+    // A dot level with each stop.
+    const dots: Point[] = [];
     const to = (x: number, y: number) => {
       const p = points.at(-1);
       if (p && p.x === x && p.y === y) return;
@@ -174,19 +174,42 @@ export function initScrollBall() {
 
     for (const el of stopElements()) {
       const spot = spotOf(el, rail);
+      // Stepping out around the graph also stays on screen.
+      if (spot.grid) spot.x = Math.max(spot.x, minX);
       const top = mainTop + box(el).top;
-      to(rail, spot.y);
-      dots.push(spot.y);
-      to(spot.x, spot.y);
-      const at = lengths.at(-1)!;
-      stops.push({ el, at, spur: Math.abs(spot.x - rail), w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
-      to(rail, spot.y);
+      const stop = (spur: number) => {
+        stops.push({ el, at: lengths.at(-1)!, spur, w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
+      };
+      if (spot.grid && spot.x < rail) {
+        // On wide screens the graph reaches past the rail, so the track steps out around it,
+        // through the gaps above and below, rather than running over the squares. The ball rides
+        // all of it as a ball.
+        const wrap = box(el);
+        const above = spot.grid.top - GRAPH_GAP - 4;
+        const below = wrap.top + wrap.height + GRAPH_GAP;
+        const around = [{ x: rail, y: above }, { x: spot.x, y: above }, { x: spot.x, y: spot.y }];
+        for (const p of around) to(p.x, p.y);
+        drawn.push(...around);
+        dots.push(spot);
+        stop(0);
+        const back = [{ x: spot.x, y: below }, { x: rail, y: below }];
+        for (const p of back) to(p.x, p.y);
+        drawn.push(...back);
+      } else {
+        to(rail, spot.y);
+        drawn.push({ x: rail, y: spot.y });
+        dots.push({ x: rail, y: spot.y });
+        to(spot.x, spot.y);
+        stop(Math.abs(spot.x - rail));
+        to(rail, spot.y);
+      }
     }
     graphStop = stops.find((stop) => stop.el === graph);
-    track.setAttribute('d', `M${rail} ${dots[0]}V${dots.at(-1)}`);
+    const path = (pts: Point[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('');
+    track.setAttribute('d', path(drawn));
     // The dots are zero-length segments drawn with round caps.
-    junctions.setAttribute('d', dots.map((y) => `M${rail} ${y}h0`).join(''));
-    trail.setAttribute('d', points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(''));
+    junctions.setAttribute('d', dots.map(({ x, y }) => `M${x} ${y}h0`).join(''));
+    trail.setAttribute('d', path(points));
 
     // When each stop arrives and leaves. First each gets an anchor: the scroll position where its
     // heading reaches the reading line, working back from the bottom to pull in the stops the
