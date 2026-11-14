@@ -35,8 +35,9 @@ const LEAVE = 0.1;
 const RIDE = 120;
 // Near the bottom stops are pulled in so they all get a turn; each keeps at least this much scroll.
 const MIN_GAP = 160;
-// The rail keeps this far left of the text.
+// The rail keeps this far left of the text, and steps out this far clear of the graph.
 const RAIL_GAP = 28;
+const GRAPH_GAP = 16;
 // ...and at least this far in from the screen's edge.
 const EDGE = 5;
 // The ball parks once it's this close to a stop, rather than crawling the last pixels.
@@ -129,7 +130,7 @@ export function initScrollBall() {
   ];
 
   // Where the ball's left end sits at a stop (plus half a ball), and its size once parked there.
-  // At the graph it stays a ball, touching the grid's left edge (or on the rail, if that's nearer
+  // At the graph it stays a ball, a little way out from the grid's left edge (or on the rail, if that's nearer
   // the text), level with its middle row; `grid` is the grid's box, which the track steps around.
   const spotOf = (el: HTMLElement, rail: number): Point & { w: number; h: number; grid?: Box } => {
     const b = box(el);
@@ -141,7 +142,7 @@ export function initScrollBall() {
       const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
       const day = full?.querySelectorAll<HTMLElement>('.day')[3];
       const y = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
-      return { x: Math.min(rail, grid.left - 2 - DOT / 2), y, w: DOT, h: DOT, grid };
+      return { x: Math.min(rail, grid.left - GRAPH_GAP), y, w: DOT, h: DOT, grid };
     }
     // Headings get an underline.
     const h = DOT * 0.6;
@@ -180,8 +181,8 @@ export function initScrollBall() {
         // through the gaps above and below, rather than running over the squares. The ball rides
         // all of it as a ball.
         const wrap = box(el);
-        const above = spot.grid.top - 16;
-        const below = wrap.top + wrap.height + 12;
+        const above = spot.grid.top - GRAPH_GAP - 4;
+        const below = wrap.top + wrap.height + GRAPH_GAP;
         const around = [{ x: rail, y: above }, { x: spot.x, y: above }, { x: spot.x, y: spot.y }];
         for (const p of around) to(p.x, p.y);
         drawn.push(...around);
