@@ -1,17 +1,20 @@
-// The red ball on the About page. It runs on a track: a straight rail down the left margin with a
-// short straight spur out to each stop: the title, each role and section heading, the
-// contribution graph and the "Get in touch" button. Scrolling sets how far along the track the
-// ball should be, and it eases there, leaving a fading trail drawn over the same straight lines.
-// Parked at a stop it becomes that stop's highlight: an underline under a heading, a fill for the
-// button. Passing the graph wakes it. The markup and styles it drives (.ball, .trail, .timeline,
+// The red ball on the About page. It runs down a straight rail in the left margin, clear of the
+// text and the contribution graph, with a dot on the rail level with each stop: the title, each
+// role and section heading, the graph and the "Get in touch" button. Scrolling sets how far along
+// the track the ball should be, and it eases there, leaving a fading trail. At a heading or the
+// button it leaves the rail and stretches out across to become that stop's highlight (an
+// underline, a fill for the button), and pulls back into a ball on its way back to the rail, so
+// it only ever rides the rail as a ball. Only the rail and its dots are drawn. Reaching the graph
+// wakes it. The markup and styles it drives (.ball, .trail, .timeline,
 // .roles, .graph, .touch) live in src/pages/about.astro and src/components/ContributionGraph.astro.
 
 type Point = { x: number; y: number };
 type Box = { top: number; left: number; width: number; height: number };
 type Stop = {
   el: HTMLElement;
-  // Distance along the track.
+  // Distance along the track, and how far before (and after) that it leaves (and rejoins) the rail.
   at: number;
+  spur: number;
   // The ball's size while parked there.
   w: number;
   h: number;
@@ -31,6 +34,11 @@ const LEAVE = 0.1;
 const RIDE = 120;
 // Near the bottom stops are pulled in so they all get a turn; each keeps at least this much scroll.
 const MIN_GAP = 160;
+// The rail keeps this far left of the text and of the graph.
+const RAIL_GAP = 28;
+const GRAPH_GAP = 20;
+// ...and at least this far in from the screen's edge.
+const EDGE = 5;
 // The ball parks once it's this close to a stop, rather than crawling the last pixels.
 const PARK_PX = 2;
 // Once scrolling has rested, a scroll smaller than this (trackpad drift, scroll anchoring) doesn't
@@ -120,19 +128,19 @@ export function initScrollBall() {
     touch,
   ];
 
-  // Where the ball's centre sits at a stop, and its size once parked there (and for the graph, its
-  // grid's box, which the track steps around).
-  const spotOf = (el: HTMLElement): Point & { w: number; h: number; grid?: Box } => {
+  // Where the ball's left end sits at a stop (plus half a ball), and its size once parked there.
+  // At the graph it stays on the rail, level with the grid's middle row.
+  const spotOf = (el: HTMLElement, rail: number): Point & { w: number; h: number } => {
     const b = box(el);
     if (el === touch) return { x: b.left + DOT / 2, y: b.top + b.height / 2, w: b.width, h: b.height };
     if (el === graph) {
-      // A round ball touching the grid's left edge, level with the fourth row (Wednesdays),
-      // measured on the last full week as the first and current ones can be short.
+      // Level with the fourth row (Wednesdays), measured on the last full week as the first and
+      // current ones can be short.
       const grid = box(graph.querySelector<HTMLElement>('.grid')!);
       const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
       const day = full?.querySelectorAll<HTMLElement>('.day')[3];
       const y = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
-      return { x: grid.left - 2 - DOT / 2, y, w: DOT, h: DOT, grid };
+      return { x: rail, y, w: DOT, h: DOT };
     }
     // Headings get an underline.
     const h = DOT * 0.6;
@@ -141,17 +149,22 @@ export function initScrollBall() {
 
   const build = () => {
     measureView();
-    // The rail hugs the outer edge of the left margin. On phones that margin is just the screen
-    // edge, so it runs right beside the text instead.
-    const phone = timeline.getBoundingClientRect().left < DOT * 2;
-    const rail = phone ? box(list).left - 2 - DOT / 2 : box(timeline).left + 2 + DOT / 2;
+    // The rail runs left of both the text and the graph (which reaches past the text on wide
+    // screens), but never off the screen.
+    const mainLeft = main.getBoundingClientRect().left;
+    const grid = graph?.querySelector<HTMLElement>('.grid');
+    const text = box(list).left;
+    const rail = Math.max(
+      Math.min(text - RAIL_GAP, grid ? box(grid).left - GRAPH_GAP : Infinity),
+      EDGE + DOT / 2 - mainLeft,
+    );
     const mainTop = main.getBoundingClientRect().top + scrollY;
 
     points = [];
     lengths = [];
     stops = [];
-    // Where each stop's spur leaves the rail, marked with a dot.
-    const forks: Point[] = [];
+    // The dot on the rail level with each stop.
+    const dots: number[] = [];
     const to = (x: number, y: number) => {
       const p = points.at(-1);
       if (p && p.x === x && p.y === y) return;
@@ -160,38 +173,20 @@ export function initScrollBall() {
     };
 
     for (const el of stopElements()) {
-      const spot = spotOf(el);
+      const spot = spotOf(el, rail);
       const top = mainTop + box(el).top;
-      const stop = (): void => {
-        stops.push({ el, at: lengths.at(-1)!, w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
-      };
-      if (spot.grid && spot.x < rail) {
-        // On wide screens the graph reaches past the rail, so the track steps out around it,
-        // through the gaps above and below, rather than running over the squares.
-        const wrap = box(el);
-        const above = spot.grid.top - 16;
-        const below = wrap.top + wrap.height + 12;
-        to(rail, above);
-        to(spot.x, above);
-        to(spot.x, spot.y);
-        forks.push(spot);
-        stop();
-        to(spot.x, below);
-        to(rail, below);
-      } else {
-        if (points.length) to(rail, spot.y);
-        forks.push({ x: rail, y: spot.y });
-        to(spot.x, spot.y);
-        stop();
-        to(rail, spot.y);
-      }
+      to(rail, spot.y);
+      dots.push(spot.y);
+      to(spot.x, spot.y);
+      const at = lengths.at(-1)!;
+      stops.push({ el, at, spur: Math.abs(spot.x - rail), w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
+      to(rail, spot.y);
     }
     graphStop = stops.find((stop) => stop.el === graph);
-    const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('');
-    track.setAttribute('d', d);
+    track.setAttribute('d', `M${rail} ${dots[0]}V${dots.at(-1)}`);
     // The dots are zero-length segments drawn with round caps.
-    junctions.setAttribute('d', forks.map(({ x, y }) => `M${x} ${y}h0`).join(''));
-    trail.setAttribute('d', d);
+    junctions.setAttribute('d', dots.map((y) => `M${rail} ${y}h0`).join(''));
+    trail.setAttribute('d', points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(''));
 
     // When each stop arrives and leaves. First each gets an anchor: the scroll position where its
     // heading reaches the reading line, working back from the bottom to pull in the stops the
@@ -206,7 +201,9 @@ export function initScrollBall() {
     // with a heading in view, it's underlined. Where two windows meet or overlap, they split the
     // difference, leaving a short ride between them.
     stops.forEach((stop, i) => {
-      stop.arrive = i === 0 ? -Infinity : anchor[i] - viewH * (ENTER - LINE);
+      // The button, last, sits near the bottom with the last section still on screen above it;
+      // it only takes over at the very end, so that section gets its turn.
+      stop.arrive = i === 0 ? -Infinity : anchor[i] - (i === last ? MIN_GAP / 2 : viewH * (ENTER - LINE));
       stop.leave = i === last ? Infinity : Math.max(stop.top - viewH * LEAVE, anchor[i] + 16);
     });
     for (let i = 0; i < last; i++) {
@@ -242,6 +239,9 @@ export function initScrollBall() {
   let goal = 0;
   let goalStop: Stop | null = null;
   let parked: Stop | null = null;
+  let shape = { w: DOT, h: DOT };
+  // Eases the stretch in and out, so it starts and finishes gently.
+  const ease = (x: number) => x * x * (3 - 2 * x);
   // Recent positions along the track, for the trail.
   let history: { s: number; t: number }[] = [];
   let frame = 0;
@@ -288,15 +288,21 @@ export function initScrollBall() {
       if (bottom > 0 && top < innerHeight) wake();
     }
 
-    // Parked once it has come to rest at a stop: grow into that stop's highlight. Leaving, it
-    // shrinks back into a ball as it moves off (the sizes animate in CSS).
     const at = goalStop && s === goal ? goalStop : null;
     if (at !== parked) {
       parked = at;
-      ball.classList.toggle('parked', !!at);
-      ball.style.width = at ? `${at.w}px` : '';
-      ball.style.height = at ? `${at.h}px` : '';
       touch.classList.toggle('lit', at?.el === touch);
+    }
+    // Out along a stop's spur the ball stretches towards that stop's highlight, all the way once
+    // it's there, and back into a ball by the time it's back on the rail.
+    const near = stops.find((stop) => stop.spur > 0 && Math.abs(s - stop.at) < stop.spur);
+    const m = near ? ease(1 - Math.abs(s - near.at) / near.spur) : 0;
+    const w = near ? DOT + (near.w - DOT) * m : DOT;
+    const h = near ? DOT + (near.h - DOT) * m : DOT;
+    if (w !== shape.w || h !== shape.h) {
+      shape = { w, h };
+      ball.style.width = `${w}px`;
+      ball.style.height = `${h}px`;
     }
     const p = pointAt(s);
     ball.style.transform = `translate(${p.x - DOT / 2}px, ${p.y}px) translateY(-50%)`;
