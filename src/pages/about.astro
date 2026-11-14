@@ -185,11 +185,11 @@ const roles = [
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  /* The track and a dot at each stop, barely there. */
+  /* The track and a dot at each stop, quietly in the background. */
   .trail .track,
-  .trail .junctions { stroke: color-mix(in oklab, var(--border) 55%, var(--bg)); }
+  .trail .junctions { stroke: var(--border); }
   .trail .track { stroke-width: 1.5px; }
-  .trail .junctions { stroke-width: 5px; }
+  .trail .junctions { stroke-width: 7px; }
   .ball {
     position: absolute;
     top: 0;
