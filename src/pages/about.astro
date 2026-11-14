@@ -147,6 +147,7 @@ const roles = [
       </linearGradient>
     </defs>
     <path class="track" />
+    <path class="junctions" />
     <path class="trail-line" stroke="url(#trail-fade)" />
   </svg>
   <span class="ball" aria-hidden="true"></span>
@@ -184,10 +185,11 @@ const roles = [
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .trail .track {
-    stroke: var(--border);
-    stroke-width: 2px;
-  }
+  /* The track and a dot at each stop, barely there. */
+  .trail .track,
+  .trail .junctions { stroke: color-mix(in oklab, var(--border) 55%, var(--bg)); }
+  .trail .track { stroke-width: 1.5px; }
+  .trail .junctions { stroke-width: 5px; }
   .ball {
     position: absolute;
     top: 0;

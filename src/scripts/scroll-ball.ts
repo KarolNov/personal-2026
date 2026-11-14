@@ -41,6 +41,7 @@ export function initScrollBall() {
   const ball = document.querySelector<HTMLElement>('.ball');
   const svg = document.querySelector<SVGSVGElement>('.trail');
   const track = svg?.querySelector('.track');
+  const junctions = svg?.querySelector('.junctions');
   const trail = svg?.querySelector('.trail-line');
   const fade = svg?.querySelector('linearGradient');
   const main = ball?.parentElement;
@@ -50,7 +51,7 @@ export function initScrollBall() {
   const touch = document.querySelector<HTMLElement>('.touch');
   // The contribution graph's wrapper. The graph inside it is replaced once the live copy loads.
   const graph = document.querySelector<HTMLElement>('.graph');
-  if (!ball || !track || !trail || !fade || !main || !title || !timeline || !list || !touch) {
+  if (!ball || !track || !junctions || !trail || !fade || !main || !title || !timeline || !list || !touch) {
     // No ball to wake the graph: don't leave it greyed out.
     document.documentElement.classList.remove('graph-asleep');
     return;
@@ -143,6 +144,8 @@ export function initScrollBall() {
     points = [];
     lengths = [];
     stops = [];
+    // Where each stop's spur leaves the rail, marked with a dot.
+    const forks: Point[] = [];
     const to = (x: number, y: number) => {
       const p = points.at(-1);
       if (p && p.x === x && p.y === y) return;
@@ -166,11 +169,13 @@ export function initScrollBall() {
         to(rail, above);
         to(spot.x, above);
         to(spot.x, spot.y);
+        forks.push(spot);
         stop();
         to(spot.x, below);
         to(rail, below);
       } else {
         if (points.length) to(rail, spot.y);
+        forks.push({ x: rail, y: spot.y });
         to(spot.x, spot.y);
         stop();
         to(rail, spot.y);
@@ -178,6 +183,8 @@ export function initScrollBall() {
     }
     const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('');
     track.setAttribute('d', d);
+    // The dots are zero-length segments drawn with round caps.
+    junctions.setAttribute('d', forks.map(({ x, y }) => `M${x} ${y}h0`).join(''));
     trail.setAttribute('d', d);
 
     // When each stop arrives and leaves. First each gets an anchor: the scroll position where its
