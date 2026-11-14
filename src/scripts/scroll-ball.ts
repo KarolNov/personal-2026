@@ -40,7 +40,8 @@ const DAMPING = 2 * Math.sqrt(STIFFNESS);
 export function initScrollBall() {
   const ball = document.querySelector<HTMLElement>('.ball');
   const svg = document.querySelector<SVGSVGElement>('.trail');
-  const trail = svg?.querySelector('path');
+  const track = svg?.querySelector('.track');
+  const trail = svg?.querySelector('.trail-line');
   const fade = svg?.querySelector('linearGradient');
   const main = ball?.parentElement;
   const title = document.querySelector<HTMLElement>('main h1');
@@ -49,7 +50,7 @@ export function initScrollBall() {
   const touch = document.querySelector<HTMLElement>('.touch');
   // The contribution graph's wrapper. The graph inside it is replaced once the live copy loads.
   const graph = document.querySelector<HTMLElement>('.graph');
-  if (!ball || !trail || !fade || !main || !title || !timeline || !list || !touch) {
+  if (!ball || !track || !trail || !fade || !main || !title || !timeline || !list || !touch) {
     // No ball to wake the graph: don't leave it greyed out.
     document.documentElement.classList.remove('graph-asleep');
     return;
@@ -175,7 +176,9 @@ export function initScrollBall() {
         to(rail, spot.y);
       }
     }
-    trail.setAttribute('d', points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(''));
+    const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('');
+    track.setAttribute('d', d);
+    trail.setAttribute('d', d);
 
     // When each stop arrives and leaves. First each gets an anchor: the scroll position where its
     // heading reaches the reading line, working back from the bottom to pull in the stops the

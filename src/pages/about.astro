@@ -146,7 +146,8 @@ const roles = [
         <stop offset="1" stop-color="currentColor" stop-opacity="0.45" />
       </linearGradient>
     </defs>
-    <path stroke="url(#trail-fade)" />
+    <path class="track" />
+    <path class="trail-line" stroke="url(#trail-fade)" />
   </svg>
   <span class="ball" aria-hidden="true"></span>
 </BaseLayout>
@@ -158,15 +159,15 @@ const roles = [
   /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It runs on a
      track of straight lines: a rail down the left margin with a spur out to each stop. Parked at
      the title or a heading it stretches into an underline; passing the contribution graph wakes
-     it; at the end it fills in the "Get in touch" button. A fading trail follows it along the
-     track. Both sit behind the text. */
+     it; at the end it fills in the "Get in touch" button. The track is drawn faintly, and a
+     fading trail follows the ball along it. All of it sits behind the text. */
   :global(main) { position: relative; }
   /* Nothing should scroll the page sideways. */
   :global(body) { overflow-x: clip; }
   h1, h2 { width: fit-content; }
   .trail {
-    /* Laid over main; the script draws the track in main's coordinates and shows only the
-       stretch the ball just covered. */
+    /* Laid over main; the script draws the track in main's coordinates, and of the trail only
+       the stretch the ball just covered. */
     position: absolute;
     inset: 0;
     width: 100%;
@@ -182,6 +183,10 @@ const roles = [
     stroke-width: 0.3rem;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .trail .track {
+    stroke: var(--border);
+    stroke-width: 2px;
   }
   .ball {
     position: absolute;
