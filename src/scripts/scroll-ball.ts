@@ -43,9 +43,12 @@ const GRAPH_GAP = 16;
 const EDGE = 5;
 // The ball parks once it's this close to a stop, rather than crawling the last pixels.
 const PARK_PX = 2;
-// Once scrolling has rested, a scroll smaller than this (trackpad drift, scroll anchoring) doesn't
-// count as scrolling again, so the ball stays parked.
-const NUDGE_PX = 16;
+// Scrolling only counts as having come to rest (sending the ball on to the nearer stop) after this
+// long without a scroll event, so a brief pause mid-scroll doesn't flash an underline.
+const REST_MS = 350;
+// Once scrolling has rested, a scroll smaller than this (trackpad drift, scroll anchoring, a small
+// nudge) doesn't count as scrolling again: the ball stays where it parked.
+const NUDGE_PX = 40;
 const TRAIL_MS = 320;
 // The ball's spring along the track (critically damped: no overshoot).
 const STIFFNESS = 120;
@@ -395,8 +398,8 @@ export function initScrollBall() {
     else lastTick = 0;
   }
 
-  // Whether scrolling has come to rest: a short pause in scroll events, or scrollend where it
-  // fires (iOS doesn't always deliver it, so it isn't relied on).
+  // Whether scrolling has come to rest: a pause of REST_MS in scroll events. (Not scrollend: on
+  // desktop it fires at every brief pause between wheel gestures.)
   let resting = true;
   let restY = scrollY;
   let restTimer = 0;
@@ -404,7 +407,7 @@ export function initScrollBall() {
     if (resting && Math.abs(scrollY - restY) < NUDGE_PX) return update();
     resting = false;
     clearTimeout(restTimer);
-    restTimer = window.setTimeout(onRest, 120);
+    restTimer = window.setTimeout(onRest, REST_MS);
     update();
   };
   const onRest = () => {
@@ -415,8 +418,10 @@ export function initScrollBall() {
     update();
   };
 
+  // While resting, the ball stays where it parked: small nudges don't re-pick the nearer stop.
   const retarget = () => {
-    ({ s: goal, stop: goalStop } = targetAt(scrollY, resting));
+    const y = resting && Math.abs(scrollY - restY) < NUDGE_PX ? restY : scrollY;
+    ({ s: goal, stop: goalStop } = targetAt(y, resting));
   };
   // Put the ball at its goal at once, with no ride and no trail.
   const jump = () => {
@@ -474,7 +479,6 @@ export function initScrollBall() {
     place();
   });
   addEventListener('scroll', onScroll, { passive: true });
-  document.addEventListener('scrollend', onRest);
   addEventListener('resize', onResize);
   reduceMotion.addEventListener('change', () => {
     if (reduceMotion.matches) {
