@@ -7,6 +7,7 @@
 // .roles, .graph, .touch) live in src/pages/about.astro and src/components/ContributionGraph.astro.
 
 type Point = { x: number; y: number };
+type Box = { top: number; left: number; width: number; height: number };
 type Stop = {
   el: HTMLElement;
   // Distance along the track.
@@ -32,6 +33,9 @@ const RIDE = 120;
 const MIN_GAP = 160;
 // The ball parks once it's this close to a stop, rather than crawling the last pixels.
 const PARK_PX = 2;
+// Once scrolling has rested, a scroll smaller than this (trackpad drift, scroll anchoring) doesn't
+// count as scrolling again, so the ball stays parked.
+const NUDGE_PX = 16;
 const TRAIL_MS = 320;
 // The ball's spring along the track (critically damped: no overshoot).
 const STIFFNESS = 260;
@@ -42,7 +46,7 @@ export function initScrollBall() {
   const svg = document.querySelector<SVGSVGElement>('.trail');
   const track = svg?.querySelector('.track');
   const junctions = svg?.querySelector('.junctions');
-  const trail = svg?.querySelector('.trail-line');
+  const trail = svg?.querySelector<SVGPathElement>('.trail-line');
   const fade = svg?.querySelector('linearGradient');
   const main = ball?.parentElement;
   const title = document.querySelector<HTMLElement>('main h1');
@@ -64,7 +68,7 @@ export function initScrollBall() {
 
   // Layout boxes in main's coordinates, which the ball and trail are positioned in. Built from
   // offsets, not getBoundingClientRect, so the page's entrance animation doesn't skew them.
-  const box = (el: HTMLElement) => {
+  const box = (el: HTMLElement): Box => {
     let top = 0;
     let left = 0;
     for (let node: HTMLElement | null = el; node && node !== main; node = node.offsetParent as HTMLElement | null) {
@@ -91,6 +95,7 @@ export function initScrollBall() {
   // Distance along the track at each point.
   let lengths: number[] = [];
   let stops: Stop[] = [];
+  let graphStop: Stop | undefined;
 
   const pointAt = (s: number): Point => {
     let i = 1;
@@ -115,8 +120,9 @@ export function initScrollBall() {
     touch,
   ];
 
-  // Where the ball's centre sits at a stop, and its size once parked there.
-  const spotOf = (el: HTMLElement) => {
+  // Where the ball's centre sits at a stop, and its size once parked there (and for the graph, its
+  // grid's box, which the track steps around).
+  const spotOf = (el: HTMLElement): Point & { w: number; h: number; grid?: Box } => {
     const b = box(el);
     if (el === touch) return { x: b.left + DOT / 2, y: b.top + b.height / 2, w: b.width, h: b.height };
     if (el === graph) {
@@ -126,7 +132,7 @@ export function initScrollBall() {
       const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
       const day = full?.querySelectorAll<HTMLElement>('.day')[3];
       const y = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
-      return { x: grid.left - 2 - DOT / 2, y, w: DOT, h: DOT };
+      return { x: grid.left - 2 - DOT / 2, y, w: DOT, h: DOT, grid };
     }
     // Headings get an underline.
     const h = DOT * 0.6;
@@ -159,12 +165,11 @@ export function initScrollBall() {
       const stop = (): void => {
         stops.push({ el, at: lengths.at(-1)!, w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
       };
-      if (el === graph && spot.x < rail) {
+      if (spot.grid && spot.x < rail) {
         // On wide screens the graph reaches past the rail, so the track steps out around it,
         // through the gaps above and below, rather than running over the squares.
-        const grid = box(graph.querySelector<HTMLElement>('.grid')!);
-        const wrap = box(graph);
-        const above = grid.top - 16;
+        const wrap = box(el);
+        const above = spot.grid.top - 16;
         const below = wrap.top + wrap.height + 12;
         to(rail, above);
         to(spot.x, above);
@@ -181,6 +186,7 @@ export function initScrollBall() {
         to(rail, spot.y);
       }
     }
+    graphStop = stops.find((stop) => stop.el === graph);
     const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('');
     track.setAttribute('d', d);
     // The dots are zero-length segments drawn with round caps.
@@ -211,6 +217,7 @@ export function initScrollBall() {
       a.leave = mid - ride / 2;
       b.arrive = mid + ride / 2;
     }
+    builtFor = layoutKey();
   }
 
   // Where along the track the ball belongs at a scroll position, and the stop it's parked at.
@@ -239,6 +246,9 @@ export function initScrollBall() {
   let history: { s: number; t: number }[] = [];
   let frame = 0;
   let lastTick = 0;
+  // The role last put in focus (-2: none set yet), and where reduced motion last showed the ball.
+  let activeRole = -2;
+  let stillAt: HTMLElement | null = null;
 
   // The graph starts greyed out (see src/pages/about.astro) and wakes once the ball reaches it:
   // the colour ripples out from where it touched, and it stays awake.
@@ -271,6 +281,13 @@ export function initScrollBall() {
   }
 
   const render = (now: number) => {
+    // Reaching the graph (or riding past it while it's on screen) wakes it. Checked before any
+    // style is written, so reading the graph's position doesn't force a layout.
+    if (!woken && graphStop && s >= graphStop.at - 1 && figure) {
+      const { top, bottom } = figure.getBoundingClientRect();
+      if (bottom > 0 && top < innerHeight) wake();
+    }
+
     // Parked once it has come to rest at a stop: grow into that stop's highlight. Leaving, it
     // shrinks back into a ball as it moves off (the sizes animate in CSS).
     const at = goalStop && s === goal ? goalStop : null;
@@ -287,26 +304,32 @@ export function initScrollBall() {
     // The role the ball last passed is in focus and the others dim; any other stop clears it.
     const passed = stops.findLast((stop) => stop.at <= s + 0.5);
     const active = passed ? roles.findIndex((role) => role.contains(passed.el)) : -1;
-    roles.forEach((role, i) => role.classList.toggle('active', i === active));
-    list.classList.toggle('dim', active >= 0);
-
-    // Reaching the graph (or riding past it while it's on screen) wakes it.
-    const graphStop = stops.find((stop) => stop.el === graph);
-    if (!woken && graphStop && s >= graphStop.at - 1 && figure) {
-      const { top, bottom } = figure.getBoundingClientRect();
-      if (bottom > 0 && top < innerHeight) wake();
+    if (active !== activeRole) {
+      activeRole = active;
+      roles.forEach((role, i) => role.classList.toggle('active', i === active));
+      list.classList.toggle('dim', active >= 0);
     }
 
     // The trail is the stretch of track covered in the last TRAIL_MS, fading towards its tail.
-    history = history.filter((h) => now - h.t <= TRAIL_MS);
-    const tail = history[0]?.s ?? s;
+    // It reaches back to the furthest point the ball has been from where it is now, so it doesn't
+    // vanish when the ball turns back.
+    while (history.length && now - history[0].t > TRAIL_MS) history.shift();
+    const tail = history.reduce((far, h) => (Math.abs(h.s - s) > Math.abs(far - s) ? h.s : far), s);
     const length = Math.abs(s - tail);
     trail.style.visibility = length < 1 ? 'hidden' : '';
     if (length >= 1) {
       const total = lengths.at(-1)!;
       trail.style.strokeDasharray = `${length} ${total + length}`;
       trail.style.strokeDashoffset = `${-Math.min(s, tail)}`;
-      const [from, to] = [pointAt(tail), pointAt(s)];
+      // The fade runs in a straight line from the trail's point furthest from the ball. (Its tail
+      // can sit right on the ball, after a ride out along a spur and back, which would leave the
+      // gradient no direction and paint it solid.)
+      const to = pointAt(s);
+      let from = pointAt(tail);
+      for (const h of history) {
+        const p = pointAt(h.s);
+        if (Math.hypot(p.x - to.x, p.y - to.y) > Math.hypot(from.x - to.x, from.y - to.y)) from = p;
+      }
       fade.setAttribute('x1', `${from.x}`);
       fade.setAttribute('y1', `${from.y}`);
       fade.setAttribute('x2', `${to.x}`);
@@ -315,9 +338,11 @@ export function initScrollBall() {
 
     if (reduceMotion.matches) {
       // Reduced motion: only the underlines show, faded in where they are; no ball in between.
-      const shown = !!parked && parked.el !== graph;
-      if (shown && ball.style.opacity !== '1') ball.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
-      ball.style.opacity = shown ? '1' : '0';
+      // Fades in each time it shows at a new heading, including straight from another one.
+      const shownAt = parked && parked.el !== graph ? parked.el : null;
+      if (shownAt && shownAt !== stillAt) ball.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+      stillAt = shownAt;
+      ball.style.opacity = shownAt ? '1' : '0';
     }
   }
 
@@ -344,8 +369,10 @@ export function initScrollBall() {
   // Whether scrolling has come to rest: a short pause in scroll events, or scrollend where it
   // fires (iOS doesn't always deliver it, so it isn't relied on).
   let resting = true;
+  let restY = scrollY;
   let restTimer = 0;
   const onScroll = () => {
+    if (resting && Math.abs(scrollY - restY) < NUDGE_PX) return update();
     resting = false;
     clearTimeout(restTimer);
     restTimer = window.setTimeout(onRest, 120);
@@ -355,48 +382,59 @@ export function initScrollBall() {
     clearTimeout(restTimer);
     if (resting) return;
     resting = true;
+    restY = scrollY;
     update();
   };
 
-  const update = () => {
+  const retarget = () => {
     ({ s: goal, stop: goalStop } = targetAt(scrollY, resting));
-    if (reduceMotion.matches) {
-      s = goal;
-      v = 0;
-      history = [];
-      render(performance.now());
-    } else if (!frame) {
-      frame = requestAnimationFrame(tick);
-    }
-  }
-
-  // Jump straight to where the ball belongs, without animating.
-  const place = () => {
-    ({ s: goal, stop: goalStop } = targetAt(scrollY, resting));
+  };
+  // Put the ball at its goal at once, with no ride and no trail.
+  const jump = () => {
     s = goal;
     v = 0;
     history = [];
-    ball.style.transition = 'none';
     render(performance.now());
+  };
+
+  const update = () => {
+    retarget();
+    if (reduceMotion.matches) jump();
+    else if (!frame) frame = requestAnimationFrame(tick);
+  }
+
+  // Jump straight to where the ball belongs, without animating its size either.
+  const place = () => {
+    retarget();
+    ball.style.transition = 'none';
+    jump();
     ball.offsetWidth;
     ball.style.transition = '';
   }
 
-  // Rebuild the track after layout changes, keeping the ball at the same point between its stops.
+  // Rebuild the track after layout changes, keeping the ball at the same point between the same
+  // two stops, even if a stop came or went (the graph, when the live copy swaps in).
   const rebuild = () => {
-    const count = stops.length;
     const i = stops.findLastIndex((stop) => stop.at <= s);
-    const next = stops[i + 1];
-    const progress = i >= 0 && next ? i + (s - stops[i].at) / (next.at - stops[i].at) : i;
+    const [a0, b0] = [stops[i], stops[i + 1]];
+    const progress = a0 && b0 ? (s - a0.at) / (b0.at - a0.at) : 0;
     syncGraph();
     build();
-    if (stops.length !== count || i < 0) return place();
-    const k = Math.floor(progress);
-    const [a, b = a] = [stops[k], stops[k + 1]];
-    s = a.at + (b.at - a.at) * (progress - k);
+    const a = a0 && stops.find((stop) => stop.el === a0.el);
+    if (!a) return place();
+    const b = (b0 && stops.find((stop) => stop.el === b0.el)) ?? stops[stops.indexOf(a) + 1] ?? a;
+    s = a.at + (b.at - a.at) * progress;
     history = [];
     update();
   }
+  // What the track was last built for. A window resize (or main resizing) only rebuilds when this
+  // changes, so the toolbar sliding in and out on phones doesn't, and one resize doesn't build twice.
+  let builtFor = '';
+  const layoutKey = () => `${main.offsetWidth} ${main.offsetHeight} ${viewH}`;
+  const onResize = () => {
+    measureView();
+    if (layoutKey() !== builtFor) rebuild();
+  };
 
   syncGraph();
   build();
@@ -408,7 +446,7 @@ export function initScrollBall() {
   });
   addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('scrollend', onRest);
-  addEventListener('resize', rebuild);
+  addEventListener('resize', onResize);
   reduceMotion.addEventListener('change', () => {
     if (reduceMotion.matches) {
       document.documentElement.classList.remove('graph-asleep');
@@ -416,8 +454,9 @@ export function initScrollBall() {
       syncGraph();
     }
     ball.style.opacity = '';
+    stillAt = null;
     place();
   });
-  new ResizeObserver(rebuild).observe(main);
+  new ResizeObserver(onResize).observe(main);
   if (graph) new MutationObserver(rebuild).observe(graph, { childList: true, subtree: true });
 }
