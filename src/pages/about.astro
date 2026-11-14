@@ -139,7 +139,15 @@ const roles = [
     </p>
   </section>
 
-  <canvas class="trail" aria-hidden="true"></canvas>
+  <svg class="trail" aria-hidden="true">
+    <defs>
+      <linearGradient id="trail-fade" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="currentColor" stop-opacity="0" />
+        <stop offset="1" stop-color="currentColor" stop-opacity="0.45" />
+      </linearGradient>
+    </defs>
+    <path stroke="url(#trail-fade)" />
+  </svg>
   <span class="ball" aria-hidden="true"></span>
 </BaseLayout>
 
@@ -147,24 +155,33 @@ const roles = [
   .lede { font-size: 1.2rem; color: var(--muted); }
   section { margin-top: 4.5rem; }
   h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It starts as the
-     underline under the page title, drops into the left margin, and at each role and section
-     lands on the heading and stretches into an underline before dropping back into the margin.
-     On the way it touches the contribution graph, which wakes and colours in from left to right.
-     At the end it fills in the "Get in touch" button. A fading trail follows it. Both sit
-     behind the text. */
+  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It runs on a
+     track of straight lines: a rail down the left margin with a spur out to each stop. Parked at
+     the title or a heading it stretches into an underline; passing the contribution graph wakes
+     it; at the end it fills in the "Get in touch" button. A fading trail follows it along the
+     track. Both sit behind the text. */
   :global(main) { position: relative; }
-  /* The bounce can overshoot the window edge; don't let that scroll the page sideways. */
+  /* Nothing should scroll the page sideways. */
   :global(body) { overflow-x: clip; }
   h1, h2 { width: fit-content; }
   .trail {
-    /* Sized and moved by the script; it sits on the page so it scrolls with the ball. */
+    /* Laid over main; the script draws the track in main's coordinates and shows only the
+       stretch the ball just covered. */
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
     z-index: -1;
     pointer-events: none;
     animation: none;
+    color: var(--accent-bg);
+  }
+  .trail path {
+    fill: none;
+    stroke-width: 0.3rem;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .ball {
     position: absolute;
@@ -176,9 +193,15 @@ const roles = [
     background: var(--accent-bg);
     z-index: -1;
     pointer-events: none;
-    /* Driven by the script; opt out of the page entrance and start hidden until it's placed. */
+    /* Driven by the script; opt out of the page entrance and start hidden until it's placed.
+       Shrinking back into a ball is quick; stretching into a highlight has a little bounce. */
     animation: none;
     visibility: hidden;
+    transition: width 160ms var(--ease-out), height 160ms var(--ease-out);
+  }
+  .ball.parked {
+    transition-duration: 380ms;
+    transition-timing-function: cubic-bezier(0.34, 1.4, 0.64, 1);
   }
   /* The margin the ball rides in sits in the page's side padding, so role text lines up with
      the rest of the page and the ball never crosses it. Wider screens have room for more. */
@@ -240,7 +263,7 @@ const roles = [
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
-    .ball { transition: opacity 150ms var(--ease-out); }
+    .ball, .ball.parked { transition: none; }
   }
 </style>
 
