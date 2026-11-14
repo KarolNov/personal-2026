@@ -35,8 +35,9 @@ const LEAVE = 0.1;
 const RIDE = 120;
 // Near the bottom stops are pulled in so they all get a turn; each keeps at least this much scroll.
 const MIN_GAP = 160;
-// The rail keeps this far left of the text, and steps out this far clear of the graph.
+// The rail keeps this far left of the text, and of the graph where it steps out around it.
 const RAIL_GAP = 28;
+// The step around the graph passes this far above and below it.
 const GRAPH_GAP = 16;
 // ...and at least this far in from the screen's edge.
 const EDGE = 5;
@@ -142,7 +143,7 @@ export function initScrollBall() {
       const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
       const day = full?.querySelectorAll<HTMLElement>('.day')[3];
       const y = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
-      return { x: Math.min(rail, grid.left - GRAPH_GAP), y, w: DOT, h: DOT, grid };
+      return { x: Math.min(rail, grid.left - RAIL_GAP), y, w: DOT, h: DOT, grid };
     }
     // Headings get an underline.
     const h = DOT * 0.6;
@@ -153,7 +154,8 @@ export function initScrollBall() {
     measureView();
     // The rail runs just left of the text, but never off the screen.
     const mainLeft = main.getBoundingClientRect().left;
-    const rail = Math.max(box(list).left - RAIL_GAP, EDGE + DOT / 2 - mainLeft);
+    const minX = EDGE + DOT / 2 - mainLeft;
+    const rail = Math.max(box(list).left - RAIL_GAP, minX);
     const mainTop = main.getBoundingClientRect().top + scrollY;
 
     points = [];
@@ -172,6 +174,8 @@ export function initScrollBall() {
 
     for (const el of stopElements()) {
       const spot = spotOf(el, rail);
+      // Stepping out around the graph also stays on screen.
+      if (spot.grid) spot.x = Math.max(spot.x, minX);
       const top = mainTop + box(el).top;
       const stop = (spur: number) => {
         stops.push({ el, at: lengths.at(-1)!, spur, w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
