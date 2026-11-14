@@ -14,15 +14,24 @@ type Stop = {
   // The ball's size while parked there.
   w: number;
   h: number;
+  // Its element's top on the page.
+  top: number;
   // The scroll positions it arrives at and leaves at.
   arrive: number;
   leave: number;
 };
 
-// The reading line: a stop arrives as its heading reaches this far down the screen.
+// The reading line: a stop is centred on its heading being this far down the screen. It holds
+// from when the heading is ENTER down the screen until it nears the top (LEAVE).
 const LINE = 0.45;
+const ENTER = 0.75;
+const LEAVE = 0.1;
+// Between two stops the ball rides for this much scrolling (less where stops are close).
+const RIDE = 120;
 // Near the bottom stops are pulled in so they all get a turn; each keeps at least this much scroll.
 const MIN_GAP = 160;
+// The ball parks once it's this close to a stop, rather than crawling the last pixels.
+const PARK_PX = 2;
 const TRAIL_MS = 320;
 // The ball's spring along the track (critically damped: no overshoot).
 const STIFFNESS = 260;
@@ -144,7 +153,7 @@ export function initScrollBall() {
       const spot = spotOf(el);
       const top = mainTop + box(el).top;
       const stop = (): void => {
-        stops.push({ el, at: lengths.at(-1)!, w: spot.w, h: spot.h, arrive: el === title ? 0 : top - viewH * LINE, leave: top });
+        stops.push({ el, at: lengths.at(-1)!, w: spot.w, h: spot.h, top, arrive: el === title ? 0 : top - viewH * LINE, leave: 0 });
       };
       if (el === graph && spot.x < rail) {
         // On wide screens the graph reaches past the rail, so the track steps out around it,
@@ -168,29 +177,44 @@ export function initScrollBall() {
     }
     trail.setAttribute('d', points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(''));
 
-    // When each stop arrives and leaves. Arriving is when its heading reaches the reading line;
-    // working back from the bottom, stops the page would run out before are pulled in. A stop
-    // holds until halfway to the next, or until its heading nears the top of the screen.
+    // When each stop arrives and leaves. First each gets an anchor: the scroll position where its
+    // heading reaches the reading line, working back from the bottom to pull in the stops the
+    // page would run out before. (`arrive` holds the anchor until the windows are worked out.)
     const last = stops.length - 1;
     const maxScroll = Math.max(document.documentElement.scrollHeight - viewH, 0);
     stops[last].arrive = Math.min(stops[last].arrive, maxScroll - 8);
     for (let i = last - 1; i > 0; i--) stops[i].arrive = Math.min(stops[i].arrive, stops[i + 1].arrive - MIN_GAP);
     for (let i = 1; i <= last; i++) stops[i].arrive = Math.max(stops[i].arrive, stops[i - 1].arrive + 1);
+    const anchor = stops.map((stop) => stop.arrive);
+    // Then each holds while its heading is comfortably on screen, so wherever you stop scrolling
+    // with a heading in view, it's underlined. Where two windows meet or overlap, they split the
+    // difference, leaving a short ride between them.
     stops.forEach((stop, i) => {
-      if (i === last) return void (stop.leave = Infinity);
-      const half = (stops[i + 1].arrive - stop.arrive) / 2;
-      // `leave` holds the heading's top on the page until here.
-      stop.leave = stop.arrive + clamp(stop.leave - viewH * 0.1 - stop.arrive, Math.min(16, half), half);
+      stop.arrive = i === 0 ? -Infinity : anchor[i] - viewH * (ENTER - LINE);
+      stop.leave = i === last ? Infinity : Math.max(stop.top - viewH * LEAVE, anchor[i] + 16);
     });
+    for (let i = 0; i < last; i++) {
+      const [a, b] = [stops[i], stops[i + 1]];
+      const ride = Math.min(RIDE, (anchor[i + 1] - anchor[i]) * 0.3);
+      if (a.leave + ride <= b.arrive) continue;
+      const mid = clamp((a.leave + b.arrive) / 2, anchor[i] + ride / 2, anchor[i + 1] - ride / 2);
+      a.leave = mid - ride / 2;
+      b.arrive = mid + ride / 2;
+    }
   }
 
   // Where along the track the ball belongs at a scroll position, and the stop it's parked at.
-  function targetAt(y: number): { s: number; stop: Stop | null } {
+  // Once scrolling has come to rest it never waits between stops: it goes on to whichever is nearer.
+  function targetAt(y: number, resting = false): { s: number; stop: Stop | null } {
     let i = 0;
     while (i < stops.length - 1 && stops[i + 1].arrive <= y) i++;
     const a = stops[i];
     if (y <= a.leave) return { s: a.at, stop: a };
     const b = stops[i + 1];
+    if (resting) {
+      const nearer = y - a.leave < b.arrive - y ? a : b;
+      return { s: nearer.at, stop: nearer };
+    }
     return { s: a.at + ((b.at - a.at) * (y - a.leave)) / (b.arrive - a.leave), stop: null };
   }
 
@@ -296,7 +320,8 @@ export function initScrollBall() {
     // During a fast scroll the spring would fall behind and lose the ball off screen.
     const lag = viewH * 0.35;
     if (Math.abs(goal - s) > lag) s = goal - Math.sign(goal - s) * lag;
-    if (Math.abs(goal - s) < 0.1 && Math.abs(v) < 1) {
+    // Settle: heading for a stop, as soon as it's there, so the highlight starts on arrival.
+    if (Math.abs(goal - s) < (goalStop ? PARK_PX : 0.1) && (goalStop || Math.abs(v) < 1)) {
       s = goal;
       v = 0;
     }
@@ -306,8 +331,25 @@ export function initScrollBall() {
     else lastTick = 0;
   }
 
+  // Whether scrolling has come to rest: a short pause in scroll events, or scrollend where it
+  // fires (iOS doesn't always deliver it, so it isn't relied on).
+  let resting = true;
+  let restTimer = 0;
+  const onScroll = () => {
+    resting = false;
+    clearTimeout(restTimer);
+    restTimer = window.setTimeout(onRest, 120);
+    update();
+  };
+  const onRest = () => {
+    clearTimeout(restTimer);
+    if (resting) return;
+    resting = true;
+    update();
+  };
+
   const update = () => {
-    ({ s: goal, stop: goalStop } = targetAt(scrollY));
+    ({ s: goal, stop: goalStop } = targetAt(scrollY, resting));
     if (reduceMotion.matches) {
       s = goal;
       v = 0;
@@ -320,7 +362,7 @@ export function initScrollBall() {
 
   // Jump straight to where the ball belongs, without animating.
   const place = () => {
-    ({ s: goal, stop: goalStop } = targetAt(scrollY));
+    ({ s: goal, stop: goalStop } = targetAt(scrollY, resting));
     s = goal;
     v = 0;
     history = [];
@@ -354,7 +396,8 @@ export function initScrollBall() {
     build();
     place();
   });
-  addEventListener('scroll', update, { passive: true });
+  addEventListener('scroll', onScroll, { passive: true });
+  document.addEventListener('scrollend', onRest);
   addEventListener('resize', rebuild);
   reduceMotion.addEventListener('change', () => {
     if (reduceMotion.matches) {
