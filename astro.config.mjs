@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig, fontProviders } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
+import { cacheCloudflare } from '@astrojs/cloudflare/cache';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
@@ -16,6 +17,10 @@ export default defineConfig({
   }),
   // Sessions are unused; disabling them avoids provisioning a KV namespace.
   session: false,
+  // Route caching for on-demand pages, held in Cloudflare's cache in front of the Worker (needs
+  // `cache.enabled` in wrangler.jsonc). Routes and server islands opt in with Astro.cache.set(); the rest
+  // stay uncached.
+  cache: { provider: cacheCloudflare() },
   integrations: [mdx(), sitemap()],
   vite: {
     // The adapter pre-bundles every page's imports for workerd in dev, and resvg's native binary

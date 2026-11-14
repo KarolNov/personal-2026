@@ -1,5 +1,13 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ContributionGraph from '../components/ContributionGraph.astro';
+import LiveContributionGraph from '../components/LiveContributionGraph.astro';
+import { getContributions } from '../lib/contributions';
+
+// The page is prerendered with the contribution graph as of the build; the live island
+// (src/components/LiveContributionGraph.astro) swaps in current data after load.
+const github = 'KarolNov';
+const contributions = await getContributions(github);
 
 const roles = [
   {
@@ -98,6 +106,16 @@ const roles = [
       deciding what's worth building. Those years of writing it by hand are why I can review their work
       properly and stand behind what ships.
     </p>
+    {/* A stable wrapper for the ball to stop at: the island swaps the graph inside it. */}
+    {/* Greys the graph out before it paints, for the scroll ball to wake (src/scripts/scroll-ball.ts). */}
+    <script is:inline>
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('graph-asleep');
+    </script>
+    <div class="graph">
+      <LiveContributionGraph server:defer login={github}>
+        {contributions && <ContributionGraph slot="fallback" calendar={contributions} login={github} />}
+      </LiveContributionGraph>
+    </div>
     <p>
       I like small teams with clear goals, and products shaped by evidence about their users.
     </p>
@@ -117,7 +135,7 @@ const roles = [
     <h2>Elsewhere</h2>
     <p class="elsewhere">
       <a class="touch" href="/contact/">Get in touch</a>
-      <span><span class="muted">or find me on</span> <a href="https://github.com/KarolNov">GitHub</a> · <a href="https://www.linkedin.com/in/karol-nov/">LinkedIn</a></span>
+      <span><span class="muted">or find me on</span> <a href={`https://github.com/${github}`}>GitHub</a> · <a href="https://www.linkedin.com/in/karol-nov/">LinkedIn</a></span>
     </p>
   </section>
 
@@ -132,6 +150,7 @@ const roles = [
   /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It starts as the
      underline under the page title, drops into the left margin, and at each role and section
      lands on the heading and stretches into an underline before dropping back into the margin.
+     On the way it touches the contribution graph, which wakes and colours in from left to right.
      At the end it fills in the "Get in touch" button. A fading trail follows it. Both sit
      behind the text. */
   :global(main) { position: relative; }
@@ -207,6 +226,15 @@ const roles = [
   @media (hover: hover) and (pointer: fine) {
     .touch:hover { color: var(--accent-fg); border-color: var(--accent-bg); }
     .touch:hover:not(.lit) { background: var(--accent-bg); }
+  }
+
+  /* A year of days in the text column makes for tiny squares on a desktop, so where there's room the
+     graph widens past the column on both sides, centred on it (up to 56rem, keeping 2rem clear of
+     the screen edges). It never gets narrower than the column. */
+  .graph {
+    --wide: max(100%, min(56rem, 100vw - 4rem));
+    width: var(--wide);
+    margin-left: calc((100% - var(--wide)) / 2);
   }
 
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */

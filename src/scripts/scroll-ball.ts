@@ -1,7 +1,8 @@
 // The red ball on the About page: it starts as the title's underline, rides down the left margin
 // with a fading trail as you scroll, stretches into an underline under each role and section
-// heading you settle on, and finishes by filling in the "Get in touch" button. The markup and
-// styles it drives (.ball, .trail, .timeline, .roles, .touch) live in src/pages/about.astro.
+// heading you settle on, wakes the contribution graph by touching its edge, and finishes by
+// filling in the "Get in touch" button. The markup and styles it drives (.ball, .trail, .timeline,
+// .roles, .graph, .touch) live in src/pages/about.astro and src/components/ContributionGraph.astro.
 export function initScrollBall() {
   const ball = document.querySelector<HTMLElement>('.ball');
   const canvas = document.querySelector<HTMLCanvasElement>('.trail');
@@ -10,20 +11,32 @@ export function initScrollBall() {
   const timeline = document.querySelector<HTMLElement>('.timeline');
   const list = timeline?.querySelector<HTMLElement>('.roles');
   const touch = document.querySelector<HTMLElement>('.touch');
+  // The contribution graph's wrapper. The graph inside it is replaced once the live copy loads.
+  const graph = document.querySelector<HTMLElement>('.graph');
   const ctx = canvas?.getContext('2d');
 
   if (ball && canvas && ctx && main && title && timeline && list && touch) {
     const roles = [...list.querySelectorAll<HTMLElement>(':scope > li')];
     // Where the ball stops after the title, in order: each role's heading, each later section's
-    // heading, and finally the "Get in touch" button. A stop's zone is the stretch of page it
-    // belongs to; the ball arrives as the zone reaches the reading line.
-    const stops = [
+    // heading and the contribution graph, in page order, and finally the "Get in touch" button.
+    // A stop's zone is the stretch of page it belongs to; the ball arrives as the zone reaches the
+    // reading line.
+    // The graph is a stop only while it's there and still greyed out, waiting for the ball; the
+    // list is rebuilt when the graph arrives and once it has woken. (With reduced motion or the
+    // inline script missing, it's in colour from the start: see src/pages/about.astro.)
+    let woken = !document.documentElement.classList.contains('graph-asleep');
+    const buildStops = () => [
       ...roles.map((role) => ({ el: role.querySelector<HTMLElement>('.role-head')!, zone: role })),
-      ...[...main.querySelectorAll<HTMLElement>('section h2')]
-        .filter((h2) => !h2.closest('section')!.contains(timeline) && !h2.closest('section')!.contains(touch))
-        .map((h2) => ({ el: h2, zone: h2.closest('section')! })),
+      ...[...main.querySelectorAll<HTMLElement>('section h2, .graph')]
+        .filter((el) => el !== graph || (!woken && el.querySelector('.contributions')))
+        .filter((el) => !el.closest('section')!.contains(timeline) && !el.closest('section')!.contains(touch))
+        .map((el) => ({ el, zone: el === graph ? el : el.closest('section')! })),
       { el: touch, zone: touch },
     ];
+    let stops = buildStops();
+    let graphStop = stops.findIndex((s) => s.el === graph);
+    // The reading line as last worked out by target().
+    let lastLine = 0;
     const dot = ball.offsetWidth;
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const TRAIL_MS = 320;
@@ -135,8 +148,25 @@ export function initScrollBall() {
     // The ball's track hugs the outer edge of the left margin, well clear of the text. On phones
     // that margin is just the screen edge, so the track runs right beside the text instead, and
     // the hop between it and an underline is only a ball's width.
-    const trackX = () =>
+    const baseTrackX = () =>
       timeline!.getBoundingClientRect().left < dot * 2 ? box(list!).left - dot - 2 : box(timeline!).left + 2;
+    // On wide screens the contribution graph is wider than the text and reaches past the track,
+    // so alongside it the track steps out to just left of its grid (where the ball touches it),
+    // rather than running over the squares. The range is for the ball's top edge.
+    function detour() {
+      const grid = graph?.querySelector<HTMLElement>('.grid');
+      if (!grid) return null;
+      const b = box(grid);
+      const x = b.left - dot - 2;
+      return x < baseTrackX() ? { x, top: b.top - dot * 3, bottom: b.top + b.height + dot } : null;
+    }
+    // The track's x where the ball's top is at y.
+    const trackX = (y: number) => {
+      const d = detour();
+      return d && y > d.top && y < d.bottom ? d.x : baseTrackX();
+    };
+    // The furthest left the track goes, for sizing the trail's canvas.
+    const trackLeft = () => detour()?.x ?? baseTrackX();
 
     // Whether scrolling has come to rest. Only while scrolling does the ball ride the track
     // between stops; at rest it always settles on a heading.
@@ -167,8 +197,18 @@ export function initScrollBall() {
     // Where the ball should end up for the current scroll position, and the stop it's
     // stretched over there, if any.
     function target(): { box: Box; line: HTMLElement | null } {
-      // Headings get an underline; the button gets filled in.
+      // Headings get an underline, the graph a touch, and the button gets filled in.
       const shape = (el: HTMLElement) => {
+        // The graph isn't underlined: the ball stays round and touches the left edge of its grid
+        // of days, level with the fourth row (Wednesdays, the middle of the week), which wakes it.
+        // The row is measured on the last full week, as the first and current ones can be short.
+        if (el === graph) {
+          const grid = box(graph.querySelector<HTMLElement>('.grid') ?? graph);
+          const full = [...graph.querySelectorAll<HTMLElement>('.week')].filter((w) => !w.querySelector('.empty')).at(-1);
+          const day = full?.querySelectorAll<HTMLElement>('.day')[3];
+          const mid = day ? box(day).top + day.offsetHeight / 2 : grid.top + grid.height / 2;
+          return { box: { x: grid.left - dot - 2, y: mid - dot / 2, w: dot, h: dot }, line: el };
+        }
         const b = box(el);
         return el === touch
           ? { box: { x: b.left, y: b.top, w: b.width, h: b.height }, line: el }
@@ -183,6 +223,7 @@ export function initScrollBall() {
       if (scrollY < 16) return shape(title!);
 
       const y = readingLine();
+      lastLine = y;
       const index = stops.findLastIndex((_, i) => land(i) <= y);
       if (index >= 0 && y < hold(index)) return shape(stops[index].el);
 
@@ -222,7 +263,8 @@ export function initScrollBall() {
       const t = clamp((y - from.at) / (land(index + 1) - from.at), 0, 1);
       const at = from.y + (centre(next.el) - from.y) * t;
       const [lo, hi] = band();
-      return { box: { x: trackX(), y: clamp(at - dot / 2, lo, hi), w: dot, h: dot }, line: null };
+      const rideY = clamp(at - dot / 2, lo, hi);
+      return { box: { x: trackX(rideY), y: rideY, w: dot, h: dot }, line: null };
     }
 
     // A spring per property. Position is critically damped — a smooth ease-out with no overshoot,
@@ -248,6 +290,56 @@ export function initScrollBall() {
     // Recent positions of the ball's leading end, in main's coordinates.
     let trail: { x: number; y: number; t: number }[] = [];
 
+    // The contribution graph starts dimmed. When the ball touches it, it wakes: the colour runs
+    // out from where it touched, and it stays awake.
+    const WAKE_MS = 650;
+    const ROW_MS = 60;
+    let figure: HTMLElement | null = null;
+    function refreshStops() {
+      stops = buildStops();
+      graphStop = stops.findIndex((s) => s.el === graph);
+    }
+    // Picks up the graph, again whenever the live copy replaces the one built with the page (or
+    // arrives when the build had none, which also makes it a stop).
+    function syncGraph() {
+      const current = graph?.querySelector<HTMLElement>('.contributions') ?? null;
+      if (current === figure) return;
+      figure = current;
+      figure?.classList.toggle('awake', woken);
+      refreshStops();
+    }
+    function wake() {
+      if (woken || !figure) return;
+      woken = true;
+      // Once it's in colour the ball has no reason to stop there: drop the stop and move on
+      // (after the current frame, as this runs mid-render).
+      refreshStops();
+      queueMicrotask(update);
+      const fig = figure;
+      // It ripples out from the square the ball touched (the first column's fourth row): left to
+      // right across the weeks, and up and down from the middle of each week. Weeks hidden on
+      // narrow screens don't count towards the run.
+      const weeks = [...fig.querySelectorAll<HTMLElement>('.week')].filter((w) => w.offsetWidth > 0);
+      weeks.forEach((week, i) => {
+        for (const day of week.querySelectorAll<HTMLElement>('.day:not(.empty)')) {
+          // Each day sits on grid row 2 (Sunday) to 8 (Saturday); row 5 is Wednesday.
+          const fromMiddle = Math.abs(Number(day.style.gridRowStart) - 5) || 0;
+          day.style.setProperty('--delay', `${Math.round((i / weeks.length) * WAKE_MS + fromMiddle * ROW_MS)}ms`);
+        }
+      });
+      fig.classList.add('waking', 'awake');
+      // Afterwards colour changes (e.g. the theme) are instant again.
+      setTimeout(() => fig.classList.remove('waking'), WAKE_MS + 3 * ROW_MS + 600);
+    }
+    // Reduced motion leaves the graph awake from the start.
+    reduceMotion.addEventListener('change', () => {
+      if (!reduceMotion.matches || woken) return;
+      document.documentElement.classList.remove('graph-asleep');
+      woken = true;
+      refreshStops();
+      update();
+    });
+
     function render() {
       // Squash and stretch along the direction of travel while it's a ball.
       const speed = Math.hypot(vel.x, vel.y);
@@ -262,6 +354,7 @@ export function initScrollBall() {
         roles.forEach((role, i) => role.classList.toggle('active', i === active));
         list!.classList.toggle('dim', active >= 0);
       }
+      if (line === graph) wake();
       ball!.style.width = `${pos.w}px`;
       ball!.style.height = `${pos.h}px`;
       ball!.style.transform =
@@ -279,7 +372,7 @@ export function initScrollBall() {
       // Kept within the window: on phones the track sits at the screen edge, and a canvas
       // poking past it lets the page wiggle sideways (iOS pans even with overflow-x clipped).
       const mainLeft = main!.getBoundingClientRect().left;
-      const x = Math.max(trackX() - dot * 2, Math.floor(-mainLeft));
+      const x = Math.max(trackLeft() - dot * 2, Math.floor(-mainLeft));
       const right = Math.min(main!.clientWidth + dot * 2, document.documentElement.clientWidth - mainLeft);
       const w = Math.floor(right - x);
       // Sized from the screen, not the window, so iOS's toolbar showing and hiding doesn't
@@ -344,8 +437,10 @@ export function initScrollBall() {
 
     // A ball at the left end of an underline, and level with it on the track.
     const ballAt = (b: Box): Box => ({ x: b.x, y: b.y + b.h / 2 - dot / 2, w: dot, h: dot });
-    const trackAt = (y: number): Box => ({ x: trackX(), y, w: dot, h: dot });
-    const onTrack = () => Math.abs(pos.x - trackX()) < 2;
+    // Heading for y along the track. Its x is where the track is at the ball's current height, so
+    // riding past the graph it steps out and back in as it goes, not when its target does.
+    const trackAt = (y: number): Box => ({ x: trackX(pos.y), y, w: dot, h: dot });
+    const onTrack = () => Math.abs(pos.x - trackX(pos.y)) < 2;
 
     // Shape changes happen in place, and only a round ball ever moves, so scrolling back and
     // forth mid-change never drags a half-shrunk line around. Leaving a stop, the underline
@@ -382,7 +477,8 @@ export function initScrollBall() {
         // Off the track (e.g. just left another stop): get back on it first, then ride.
         return onTrack() ? trackAt(end.y) : trackAt(pos.y);
       }
-      return onTrack() ? goal : trackAt(pos.y);
+      if (!onTrack()) return trackAt(pos.y);
+      return goalLine ? goal : trackAt(goal.y);
     }
 
     function step(now: number) {
@@ -403,8 +499,12 @@ export function initScrollBall() {
       }
       // A round ball is kept on screen outright, as during a fast scroll the spring alone falls
       // behind the page. One that shrank off a heading that has scrolled away shows up at the edge.
+      // While it's still hopping across from a heading to the track it's only kept within the
+      // screen, not pulled into the band: that pull would drop it before it moved left, and its
+      // path would turn down-then-left instead of left-then-down.
       if (!line) {
-        const [lo, hi] = band();
+        const top = -main!.getBoundingClientRect().top;
+        const [lo, hi] = onTrack() ? band() : [top, top + innerHeight - dot];
         if (pos.y < lo || pos.y > hi) {
           pos.y = clamp(pos.y, lo, hi);
           vel.y = 0;
@@ -443,8 +543,18 @@ export function initScrollBall() {
       else last = 0;
     }
 
+    // Scrolled past the graph without the ball stopping there (it moved on to the next stop, or
+    // the scroll was too quick to land): it wakes anyway, as soon as it's on screen.
+    // Uses the reading line target() just worked out, rather than working it out again.
+    function wakeIfPassed() {
+      if (woken || graphStop < 0 || !figure || scrollY < 16 || lastLine < hold(graphStop)) return;
+      const { top, bottom } = figure.getBoundingClientRect();
+      if (bottom > 0 && top < innerHeight) wake();
+    }
+
     function update() {
       ({ box: goal, line: goalLine } = target());
+      wakeIfPassed();
       if (line && line === goalLine) lineBox = goal;
       if (goalLine && goalLine === line) pending = null;
       else if (speed > FAST_PX_PER_S) {
@@ -461,6 +571,7 @@ export function initScrollBall() {
 
     function resize() {
       measureView();
+      syncGraph();
       sizeTrail();
       update();
     }
@@ -487,8 +598,10 @@ export function initScrollBall() {
       lineBox = goal;
       pending = null;
       render();
-      ball!.style.opacity = line ? '1' : '0';
-      if (line && changed) ball!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+      // The graph stop is only a round ball at its edge, so it stays hidden there too.
+      const shown = line && line !== graph;
+      ball!.style.opacity = shown ? '1' : '0';
+      if (shown && changed) ball!.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
     }
 
     render();
@@ -524,6 +637,10 @@ export function initScrollBall() {
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('resize', resize);
     new ResizeObserver(resize).observe(main);
+    if (graph) new MutationObserver(resize).observe(graph, { childList: true, subtree: true });
     resize();
+  } else {
+    // No ball to wake the graph: don't leave it greyed out.
+    document.documentElement.classList.remove('graph-asleep');
   }
 }

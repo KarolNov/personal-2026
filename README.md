@@ -10,7 +10,7 @@ Built with [Astro 7](https://astro.build) and deployed as a single [Cloudflare W
 | Route | Rendering | Source |
 |-------|-----------|--------|
 | `/` landing page | prerendered | `src/pages/index.astro` |
-| `/about/` | prerendered | `src/pages/about.astro` |
+| `/about/` | prerendered; the GitHub graph is a server island, edge-cached (1 h fresh, then stale-while-revalidate for a day) | `src/pages/about.astro` |
 | `/blog/`, `/blog/<slug>/` | prerendered | `src/pages/blog/`, posts in `src/content/blog/` |
 | `/rss.xml`, `/sitemap-index.xml` | prerendered | `src/pages/rss.xml.ts`, `@astrojs/sitemap` |
 | `/contact/` | on demand (Worker) | `src/pages/contact.astro` + `src/actions/index.ts` |

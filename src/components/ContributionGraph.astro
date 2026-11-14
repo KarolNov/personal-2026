@@ -1,0 +1,148 @@
+---
+// A year of GitHub contributions in the site's accent colour (data from src/lib/contributions.ts).
+import type { ContributionCalendar } from '../lib/contributions';
+
+interface Props {
+  calendar: ContributionCalendar;
+  login: string;
+}
+
+const { calendar, login } = Astro.props;
+
+const monthFormat = new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' });
+const dayFormat = new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', timeZone: 'UTC' });
+const utc = (date: string) => new Date(`${date}T00:00:00Z`);
+
+// A month label sits over the first week that starts in that month, as on GitHub. The first
+// column is skipped when it's a stray week from a month that has barely any room, and so is the
+// last, where the label would run past the edge.
+const all = calendar.weeks;
+const monthOf = (i: number) => utc(all[i][0].date).getUTCMonth();
+const labelAt = (i: number, first: number) => {
+  const month = monthOf(i);
+  const previous = i > first ? monthOf(i - 1) : -1;
+  const next = monthOf(Math.min(i + 1, all.length - 1));
+  const show = month !== previous && !(i === first && next !== month) && i < all.length - 1;
+  return show ? monthFormat.format(utc(all[i][0].date)) : '';
+};
+// Narrow screens show only the last RECENT weeks, labelled as if they started the graph.
+const RECENT = 26;
+const cut = Math.max(all.length - RECENT, 0);
+const weeks = all.map((days, i) => ({
+  days,
+  label: labelAt(i, 0),
+  recentLabel: i === cut ? labelAt(i, cut) : null,
+  old: i < cut,
+}));
+const total = calendar.total.toLocaleString('en');
+---
+
+<figure class="contributions">
+  <div
+    class="grid"
+    role="img"
+    aria-label={`${total} GitHub contributions in the last year, a heatmap by day.`}
+  >
+    {weeks.map(({ days, label, recentLabel, old }) => (
+      <div class:list={['week', { old }]}>
+        <span class:list={['month', { wide: recentLabel !== null }]}>{label}</span>
+        {recentLabel !== null && <span class="month narrow">{recentLabel}</span>}
+        {days.map((day) => (
+          <span
+            class="day"
+            data-level={day.level}
+            style={`grid-row: ${utc(day.date).getUTCDay() + 2}`}
+            title={`${day.count === 0 ? 'No' : day.count.toLocaleString('en')} contribution${day.count === 1 ? '' : 's'} on ${dayFormat.format(utc(day.date))}`}
+          />
+        ))}
+        {/* The first and current weeks are partial; fill their empty days so every column
+            has seven equal rows and the cells stay the same size. */}
+        {Array.from({ length: 7 - days.length }, () => <span class="day empty" />)}
+      </div>
+    ))}
+  </div>
+  <figcaption>
+    <span>
+      <strong>{total}</strong> contributions on <a href={`https://github.com/${login}`}>GitHub</a> in the last year,{' '}
+      <span class="muted">private and work repos included</span>
+    </span>
+    <span class="legend muted" aria-hidden="true">
+      Less
+      {[0, 1, 2, 3, 4].map((level) => <span class="day" data-level={level} />)}
+      More
+    </span>
+  </figcaption>
+</figure>
+
+<style>
+  .contributions { margin: 2rem 0 0; container-type: inline-size; }
+  .grid {
+    display: flex;
+    gap: var(--gap);
+    /* 53 weeks across the column; cells shrink with it and older weeks drop off on narrow screens. */
+    --gap: 3px;
+  }
+  .week {
+    flex: 1 1 0;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto repeat(7, auto);
+    gap: var(--gap);
+  }
+  .month {
+    grid-row: 1;
+    height: 1.1rem;
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--muted);
+    white-space: nowrap;
+    /* Labels may run over the next few columns, like GitHub's. */
+    overflow: visible;
+    width: 0;
+  }
+  .day {
+    --tint: var(--accent);
+    display: block;
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--border) 70%, var(--bg));
+  }
+  .day.empty { visibility: hidden; }
+  .day[data-level='1'] { background: color-mix(in oklab, var(--tint) 35%, var(--bg)); }
+  .day[data-level='2'] { background: color-mix(in oklab, var(--tint) 55%, var(--bg)); }
+  .day[data-level='3'] { background: color-mix(in oklab, var(--tint) 80%, var(--bg)); }
+  .day[data-level='4'] { background: var(--tint); }
+  /* On the About page the graph starts out greyed, and wakes when the scroll ball touches it:
+     the colour ripples out from the square it touched, left to right and up and down. The page
+     sets .graph-asleep on <html> before the graph paints (src/pages/about.astro); .awake, .waking
+     and each day's --delay are set by src/scripts/scroll-ball.ts. Without JS or with reduced
+     motion it's in colour from the start. */
+  :global(.graph-asleep) .contributions:not(.awake) .day { --tint: color-mix(in oklab, var(--muted) 60%, var(--bg)); }
+  .waking .day { transition: background-color 450ms var(--ease-out) var(--delay, 0ms); }
+  .waking .legend .day { --delay: 830ms; }
+
+  .month.narrow { display: none; }
+  /* Too narrow for a year at a readable size: show the last six months. */
+  @container (max-width: 34rem) {
+    .week.old, .month.wide { display: none; }
+    .month.narrow { display: block; }
+  }
+  @container (max-width: 22rem) {
+    .grid { --gap: 2px; }
+  }
+
+  figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+  }
+  figcaption strong { font-variant-numeric: tabular-nums; }
+  .legend { display: inline-flex; align-items: center; gap: 3px; font-size: 0.8rem; }
+  .legend .day { width: 0.65rem; }
+  .legend .day:first-of-type { margin-left: 0.3rem; }
+  .legend .day:last-of-type { margin-right: 0.3rem; }
+</style>
