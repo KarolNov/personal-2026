@@ -1,0 +1,50 @@
+---
+// A checklist readers can tick off. Each item is a real checkbox inside its label, so the whole line toggles it
+// and a checked item is struck through, all without JavaScript.
+
+interface Props {
+  /** Each item is a bold question and the sentence that explains it. */
+  items: [question: string, detail: string][];
+}
+const { items } = Astro.props;
+---
+
+<ul class="checklist">
+  {items.map(([question, detail]) => (
+    <li>
+      <label>
+        <input type="checkbox" />
+        <span><strong>{question}</strong> {detail}</span>
+      </label>
+    </li>
+  ))}
+</ul>
+
+<style>
+  .checklist { list-style: none; padding-left: 0; }
+  li { margin: 0.5rem 0; }
+  label {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.65rem;
+    cursor: pointer;
+  }
+  input {
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0.3rem 0 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  /* The line is only added once checked: an invisible one would show up when the text is selected. It still
+     fades in, from the transparent colour. */
+  span {
+    text-decoration-color: transparent;
+    transition: color 200ms var(--ease-out), text-decoration-color 200ms var(--ease-out);
+  }
+  input:checked + span {
+    color: var(--muted);
+    text-decoration-line: line-through;
+    text-decoration-color: currentColor;
+  }
+</style>

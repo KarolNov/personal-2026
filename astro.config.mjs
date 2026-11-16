@@ -48,4 +48,9 @@ export default defineConfig({
       fallbacks: ['ui-monospace', 'monospace'],
     },
   ],
+  // resvg ships a native .node binary that Vite's dev dependency optimizer can't bundle.
+  vite: {
+    optimizeDeps: { exclude: ['@resvg/resvg-js'] },
+    ssr: { optimizeDeps: { exclude: ['@resvg/resvg-js'] } },
+  },
 });
