@@ -13,7 +13,7 @@ interface Row {
 const rows: Row[] = [
   { from: 'v13', made: 'new Y.Map()', wire: 'typeRef 1 · YMap', seen: 'v14 Node, remembers 1 → back in v13 as Y.Map', ok: true },
   { from: 'v14', made: 'new Y.Node()', wire: 'typeRef 4 · YXmlFragment', seen: 'v13 reads Y.XmlFragment, not Y.Map', ok: false },
-  { from: 'v14', made: "new Y.Node('p')", wire: "typeRef 3 · YXmlElement 'p'", seen: 'v13 reads Y.XmlElement <p>', ok: true },
+  { from: 'v14', made: "new Y.Node('p')", wire: "typeRef 3 · YXmlElement 'p'", seen: 'v13 reads Y.XmlElement <p>: getAttribute works, get() does not', ok: false },
 ];
 ---
 
@@ -24,9 +24,9 @@ const rows: Row[] = [
   <ol>
     {rows.map((r) => (
       <li class:list={{ gap: !r.ok }}>
-        <span class="made"><b>{r.from}</b> <code>{r.made}</code></span>
-        <span class="wire"><code>{r.wire}</code></span>
-        <span class="seen">{r.ok ? '✓' : '✗'} {r.seen}</span>
+        <span class="made"><span class="sr-only">Created in </span><b>{r.from}</b> <code>{r.made}</code></span>
+        <span class="wire"><span class="sr-only">Encoded as </span><code>{r.wire}</code></span>
+        <span class="seen"><span class="sr-only">{r.ok ? 'Works: ' : 'Breaks: '}</span><span aria-hidden="true">{r.ok ? '✓' : '✗'}</span> {r.seen}</span>
       </li>
     ))}
   </ol>

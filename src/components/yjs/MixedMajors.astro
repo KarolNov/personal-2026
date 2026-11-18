@@ -7,7 +7,7 @@
 <figure class="mixed" data-mixed>
   <div class="bar">
     <span class="title">A v13 and a v14 client, one document</span>
-    <button type="button" data-reset>Reset</button>
+    <button type="button" data-reset disabled>Reset</button>
   </div>
 
   <div class="stage">
@@ -17,7 +17,7 @@
         <code class="pkg">yjs</code>
       </div>
       <div class="actions">
-        <button type="button" data-add="map">+ <code>new Y.Map()</code></button>
+        <button type="button" data-add="map" disabled>+ <code>new Y.Map()</code></button>
       </div>
       <ul class="cards" data-cards aria-live="polite"></ul>
     </section>
@@ -33,11 +33,11 @@
         <code class="pkg">@y/y</code>
       </div>
       <div class="actions">
-        <button type="button" data-add="node">+ <code>new Y.Node()</code></button>
-        <button type="button" data-add="named">+ <code>new Y.Node('card')</code></button>
+        <button type="button" data-add="node" disabled>+ <code>new Y.Node()</code></button>
+        <button type="button" data-add="named" disabled>+ <code>new Y.Node('card')</code></button>
         <label class="hack">
-          <input type="checkbox" data-hack />
-          <span>label as <code>Y.Map</code> (private API)</span>
+          <input type="checkbox" data-hack disabled />
+          <span>label <code>new Y.Node()</code> as <code>Y.Map</code> (private API)</span>
         </label>
       </div>
       <ul class="cards" data-cards aria-live="polite"></ul>
@@ -278,7 +278,6 @@
 
   async function setup(root: HTMLElement) {
     const [Y13, Y14] = await Promise.all([import('yjs'), import('@y/y')]);
-    root.querySelector<HTMLElement>('[data-loading]')!.hidden = true;
 
     const wire = root.querySelector<HTMLElement>('[data-wire]')!;
     const list = (side: Side) => root.querySelector<HTMLElement>(`[data-client="${side}"] [data-cards]`)!;
@@ -327,29 +326,51 @@
       wire.classList.add('flash');
     }
 
+    // Cards never change after they're added, so each list only appends cards it hasn't shown yet: existing
+    // cards don't replay their animation and the live region announces only the new one.
+    const shown: Record<Side, Set<string>> = { v13: new Set(), v14: new Set() };
+
+    function append(side: Side, key: string, html: string) {
+      if (shown[side].has(key)) return;
+      shown[side].add(key);
+      list(side).querySelector('.empty')?.remove();
+      list(side).insertAdjacentHTML('beforeend', html);
+    }
+
     function render() {
       // v13: read each card the way a v13 app would, as a Y.Map.
-      const cards13 = d13.getMap('cards');
-      const items13 = [...cards13.entries()].map(([key, value]) => {
+      for (const [key, value] of d13.getMap('cards').entries()) {
         const type = className(value);
         const isMap = value instanceof Y13.Map;
+        // A named v14 node arrives as an XmlElement: `get` fails, but its attributes hold the title.
         const read = isMap
           ? `<code>get('title')</code> → "${esc(String((value as InstanceType<typeof Y13.Map>).get('title')))}"`
-          : `<code>get('title')</code> → not a <code>Y.Map</code>, title unreadable`;
-        return `<li class="${isMap ? 'ok' : 'bad'}"><div class="row"><span class="key">${esc(key)}</span><span class="type">${esc(type)}</span></div><div class="read">${read}</div></li>`;
-      });
-      list('v13').innerHTML = items13.join('') || '<li class="empty">No cards yet.</li>';
+          : value instanceof Y13.XmlElement
+            ? `<code>get('title')</code> → not a <code>Y.Map</code>; <code>getAttribute('title')</code> → "${esc(String(value.getAttribute('title')))}"`
+            : `<code>get('title')</code> → not a <code>Y.Map</code>, title unreadable`;
+        append('v13', key, `<li class="${isMap ? 'ok' : 'bad'}"><div class="row"><span class="key">${esc(key)}</span><span class="type">${esc(type)}</span></div><div class="read">${read}</div></li>`);
+      }
 
       // v14: one node type; read the title attribute.
-      const cards14 = d14.get('cards');
-      const attrs = cards14.getAttrs() as Record<string, unknown>;
-      const items14 = Object.entries(attrs).map(([key, node]) => {
-        const n = node as InstanceType<typeof Y14.Node>;
+      const attrs = d14.get('cards').getAttrs() as Record<string, unknown>;
+      for (const [key, node] of Object.entries(attrs)) {
+        const n = node as (InstanceType<typeof Y14.Node> & { name?: string | null }) | null | undefined;
         const title = n?.getAttr?.('title');
-        const name = (n as { name?: string | null }).name;
-        return `<li class="ok"><div class="row"><span class="key">${esc(key)}</span><span class="type">Node${name ? `('${esc(name)}')` : ''}</span></div><div class="read"><code>getAttr('title')</code> → "${esc(String(title))}"</div></li>`;
-      });
-      list('v14').innerHTML = items14.join('') || '<li class="empty">No cards yet.</li>';
+        const name = n?.name;
+        append('v14', key, `<li class="ok"><div class="row"><span class="key">${esc(key)}</span><span class="type">Node${name ? `('${esc(name)}')` : ''}</span></div><div class="read"><code>getAttr('title')</code> → "${esc(String(title))}"</div></li>`);
+      }
+    }
+
+    // Apply to the other side first, so a failure in the wire display can't stop the sync.
+    function relay(from: Side, update: Uint8Array) {
+      if (from === 'v13') Y14.applyUpdateV2(d14, update, 'remote');
+      else Y13.applyUpdateV2(d13, update, 'remote');
+      render();
+      try {
+        showWire(from, update);
+      } catch (error) {
+        wire.textContent = `${update.length} bytes, ${from} to ${from === 'v13' ? 'v14' : 'v13'} (couldn't decode: ${error})`;
+      }
     }
 
     function connect() {
@@ -357,18 +378,16 @@
       d14 = new Y14.Doc();
       count = 0;
       d13.on('updateV2', (update: Uint8Array, origin: unknown) => {
-        if (origin === 'remote') return;
-        showWire('v13', update);
-        Y14.applyUpdateV2(d14, update, 'remote');
+        if (origin !== 'remote') relay('v13', update);
       });
       d14.on('updateV2', (update: Uint8Array, origin: unknown) => {
-        if (origin === 'remote') return;
-        showWire('v14', update);
-        Y13.applyUpdateV2(d13, update, 'remote');
+        if (origin !== 'remote') relay('v14', update);
       });
-      d13.on('afterTransaction', render);
-      d14.on('afterTransaction', render);
       wire.textContent = 'Add a card on either side.';
+      for (const side of ['v13', 'v14'] as const) {
+        shown[side].clear();
+        list(side).innerHTML = '<li class="empty">No cards yet.</li>';
+      }
       render();
     }
 
@@ -388,7 +407,8 @@
             const card = new Y14.Node(kind === 'named' ? 'card' : null) as InstanceType<typeof Y14.Node> & {
               _legacyTypeRef: number;
             };
-            if (hack.checked) card._legacyTypeRef = TYPE_REFS.YMap;
+            // Only for unnamed nodes: a Y.Map label has no slot for a name, so a named node would lose it.
+            if (hack.checked && kind === 'node') card._legacyTypeRef = TYPE_REFS.YMap;
             d14.get('cards').setAttr(key, card);
             card.setAttr('title', `Card ${count} from v14`);
           });
@@ -403,6 +423,8 @@
     });
 
     connect();
+    root.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, [data-hack]').forEach((el) => (el.disabled = false));
+    root.querySelector<HTMLElement>('[data-loading]')!.hidden = true;
   }
 
   // Load both Yjs versions only when the playground is about to scroll into view.
@@ -412,7 +434,9 @@
         if (entries.some((e) => e.isIntersecting)) {
           io.disconnect();
           setup(root).catch((error) => {
-            root.querySelector<HTMLElement>('[data-loading]')!.textContent = `Couldn't load Yjs: ${error}`;
+            const loading = root.querySelector<HTMLElement>('[data-loading]')!;
+            loading.hidden = false;
+            loading.textContent = `Couldn't load Yjs: ${error}`;
           });
         }
       },

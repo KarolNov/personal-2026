@@ -118,7 +118,8 @@ has one.
 
 The data isn't lost: a v14 client that joins later still reads every attribute, even after the server has
 stored the document and loaded it again. But a v13 app doing `cards.get(id).get('title')` gets a
-`Y.XmlFragment` (or a `Y.XmlElement`, if the node has a name) and can't read the title.
+`Y.XmlFragment` and can't read the title. If the node has a name it gets a `Y.XmlElement` instead, where
+`get('title')` still fails but `getAttribute('title')` finds it, so the app has to know to look there.
 
 You can try it below. Both clients run the real libraries, `yjs` 13.6 on the left and `@y/y` 14.0.0-rc.30 on
 the right, and every update one makes is applied to the other. Add a card on each side and compare how the v13
@@ -126,7 +127,7 @@ client reads them.
 
 <MixedMajors>
   The v13 client reads each card the way a v13 app would, as a `Y.Map`. Cards from v14 arrive as XML types unless
-  you tick the private-API box before adding one. The v14 client reads every card, whichever side made it.
+  you tick the private-API box before adding an unnamed one. The v14 client reads every card, whichever side made it.
 </MixedMajors>
 
 There's no public way to choose the label in v14. The label lives in a private field, and setting it before the
