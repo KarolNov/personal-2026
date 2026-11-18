@@ -7,3 +7,6 @@ export const NAV = [
   { href: '/contact/', label: 'Contact' },
 ];
 export const TWITTER_HANDLE = '@KNovljakovic';
+export const GITHUB_LOGIN = 'KarolNov';
+export const GITHUB_URL = `https://github.com/${GITHUB_LOGIN}`;
+export const LINKEDIN_URL = 'https://www.linkedin.com/in/karol-nov/';

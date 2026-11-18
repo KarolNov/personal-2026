@@ -14,9 +14,6 @@ interface Props {
 const DEFAULT_IMAGE = '/og.png';
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
-// Posts are also published as Markdown at /blog/<slug>.md (src/pages/blog/[slug].md.ts).
-const postSlug = Astro.url.pathname.match(/^\/blog\/([^/]+)\/?$/)?.[1];
-const postMarkdown = postSlug && new URL(`blog/${postSlug}.md`, Astro.site);
 const { title, description, image = DEFAULT_IMAGE } = Astro.props;
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 const imageURL = new URL(image, Astro.site);
@@ -55,7 +52,6 @@ const imageURL = new URL(image, Astro.site);
 <link rel="canonical" href={canonicalURL} />
 {/* Plain-text versions for LLMs and agents (src/lib/llms.ts). */}
 <link rel="alternate" type="text/plain" title="llms.txt" href={new URL('llms.txt', Astro.site)} />
-{postMarkdown && <link rel="alternate" type="text/markdown" title="This post as Markdown" href={postMarkdown} />}
 
 <title>{fullTitle}</title>
 <meta name="description" content={description} />
