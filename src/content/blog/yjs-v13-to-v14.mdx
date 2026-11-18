@@ -1,0 +1,161 @@
+---
+title: What changes between Yjs v13 and v14
+description: Notes from making two Yjs providers work on both majors. Less changed than the new package names suggest, one thing changed a lot, and a v13 and a v14 client can almost share a document.
+pubDate: 2026-11-18
+tags: [yjs, crdt, sync engines]
+---
+
+import TypeRefFlow from '../../components/yjs/TypeRefFlow.astro';
+import MixedMajors from '../../components/yjs/MixedMajors.astro';
+
+Yjs v14 is in release candidates as `@y/y`, and I wanted to see what it actually changes. I learn best from
+working code, so I took the local persistence and network sync I'd written for my Yjs playground and made them
+work on both majors. The result is [y-providers](https://github.com/KarolNov/y-providers): `y-opfs` keeps a
+document on the device (OPFS, falling back to IndexedDB), `y-transport` syncs it with a server (WebTransport,
+falling back to WebSocket), and `y-append-log` is the storage log both build on. Every package has the same API
+for v13 and v14, and the whole test suite runs once against each.
+
+This post is the short version of what I learnt, as of `@y/y` 14.0.0-rc.30. It's a release candidate, so some of
+this may change before 14.0.
+
+## Less changed than the names suggest
+
+The first thing you notice is that nothing is called `yjs` any more:
+
+```ts
+// Yjs v13
+import * as Y from 'yjs'
+import { Awareness } from 'y-protocols/awareness'
+
+// Yjs v14
+import * as Y from '@y/y'
+import { Awareness } from '@y/protocols/awareness'
+```
+
+`@y/y` also brings lib0 1.x, ships only as ES modules and wants Node 22 or newer.
+
+What a provider actually calls hasn't changed: `applyUpdateV2`, `encodeStateAsUpdateV2`,
+`encodeStateVector`, `mergeUpdatesV2` and the awareness functions all have the same names and signatures. More
+importantly, so do the bytes. A v13 update applies to a v14 document and the other way round, in both the v1 and v2
+encodings, and state vectors decode on either side. That turned out to matter later.
+
+One small difference in the types caught my typecheck: v14 types the input of `mergeUpdatesV2` as
+`Uint8Array<ArrayBuffer>[]`, so code that passes a plain `Uint8Array[]` needs a cast. Another one is easy to miss:
+v14 client IDs are 53-bit numbers, where v13's fit in 32 bits. Anything that stores client IDs in a 32-bit field
+needs a look.
+
+## What did change: one node type
+
+The document API is where v14 really is new. v13 has a type per shape (`Y.Map`, `Y.Array`, `Y.Text`,
+`Y.XmlElement`, …) and you pick one when you read a root:
+
+```ts
+// Yjs v13
+doc.getText('title').insert(0, 'Hello')
+doc.getMap('meta').set('author', 'karol')
+```
+
+v14 has a single node type. Every node can hold both attributes, which work like a map, and children, which work
+like a list or text, and a root is just `doc.get(name)`:
+
+```ts
+// Yjs v14
+doc.get('title').insert(0, 'Hello')
+doc.get('meta').setAttr('author', 'karol')
+```
+
+For providers this barely matters, since they move bytes and never look inside the document. It mattered for my
+tests, which do look inside. I ended up with a small helper per major (`text(doc, name)`, `map(doc, name)`) and
+pointed the tests at it, so the same assertions run against both. For apps it will matter a lot more: every
+`getMap` and `instanceof Y.Map` in an app has to be rethought, not renamed.
+
+## Supporting both from one codebase
+
+The obvious design is one package that detects or switches the Yjs version. I didn't go that way. If the main
+entry imports `yjs` statically, an app that only has `@y/y` fails at import time. If it imports both, an app
+bundles two copies of Yjs, and Yjs warns loudly about that because two copies of its classes break `instanceof`
+checks.
+
+So each package has a core that never imports Yjs, and two thin entry points that each import one major and pass
+in the handful of functions the core needs:
+
+```ts
+// y-append-log/src/adapter14.ts
+import * as Y from '@y/y'
+
+export const yjs: AppendLogYjs = {
+  decodeUpdateV2: Y.decodeUpdateV2,
+  mergeUpdatesV2: Y.mergeUpdatesV2,
+  // ...
+}
+```
+
+Users pick a major by import path: `y-opfs` for v13, `y-opfs/y14` for v14. A small script walks the built output
+of each entry and fails the build if a v13 entry can reach `@y/y`, or a v14 entry can reach `yjs`. The tests run as
+two Vitest projects, with aliases pointing at one entry or the other, plus a CI job that installs the newest
+`@y/y` beta so a breaking release candidate turns the build red before a user finds it.
+
+## Can a v13 client and a v14 client share a document?
+
+During a migration, some users will run the new version of an app while others are still on the old one. Since
+the bytes are the same, I tested what happens then: a v13 client and a v14 client syncing through one server, once
+with a v13 server and once with a v14 one.
+
+Most of it just works. Root text, maps and lists sync both ways. Formatting applied on either side reaches the
+other, and concurrent edits converge. Awareness works, 53-bit client IDs included. The server's major doesn't
+matter, and it loses nothing, whether it keeps the document in memory or in storage.
+
+The catch is nested types. A v13 update labels each nested type with a number, its type reference: 1 for a map,
+2 for text, 4 for an XML fragment, and so on. v13 needs that label to know which class to create. v14 doesn't, since
+it only has one class, but it still has to write a label for v13 readers. A node that came in from v13 keeps the
+label it arrived with. A node created in v14 gets an XML label: XML fragment if it has no name, XML element if it
+has one.
+
+<TypeRefFlow>
+  A nested map created by a v13 client survives a round trip through v14. A nested node created by a v14 client
+  reaches v13 as an XML type, so v13 code that expects a `Y.Map` there won't find its keys.
+</TypeRefFlow>
+
+The data isn't lost: a v14 client that joins later still reads every attribute, even after the server has
+stored the document and loaded it again. But a v13 app doing `cards.get(id).get('title')` gets a
+`Y.XmlFragment` and can't read the title. If the node has a name it gets a `Y.XmlElement` instead, where
+`get('title')` still fails but `getAttribute('title')` finds it, so the app has to know to look there.
+
+You can try it below. Both clients run the real libraries, `yjs` 13.6 on the left and `@y/y` 14.0.0-rc.30 on
+the right, and every update one makes is applied to the other. Add a card on each side and compare how the v13
+client reads them.
+
+<MixedMajors>
+  The v13 client reads each card the way a v13 app would, as a `Y.Map`. Cards from v14 arrive as XML types unless
+  you turn on the private-API switch before adding an unnamed one. The v14 client reads every card, whichever side made it.
+</MixedMajors>
+
+There's no public way to choose the label in v14. The label lives in a private field, and setting it before the
+node is inserted does work:
+
+```ts
+const card = new Y.Node()
+card._legacyTypeRef = 1 // YMapRefID: v13 clients will see a Y.Map
+cards.setAttr(id, card)
+```
+
+I wouldn't ship that. It's private API in a release candidate. I kept it as a test so the beta CI job tells me if it
+changes. If your clients will mix majors for a while, the practical rules are: keep shared state in root types,
+or create nested types only from v13 clients until everyone has moved.
+
+## What I'd tell someone porting a provider
+
+- **If you only move updates, the port is small.** A provider that sends and stores updates without reading the
+  document needs new import paths and little else.
+- **Don't switch versions at runtime.** Ship one entry point per major and check that each one reaches only its
+  own Yjs.
+- **Run every test on both majors.** The differences I hit were all in test code that read documents, not in the
+  providers themselves.
+- **Test mixed clients, and say exactly what breaks.** Your users will run both majors side by side while they
+  migrate. Root types cross without trouble; nested types made in v14 don't. That's specific enough to put in
+  the README, which is more useful than "not supported".
+
+The packages are on npm as [`y-opfs`](https://www.npmjs.com/package/y-opfs),
+[`y-transport`](https://www.npmjs.com/package/y-transport) and
+[`y-append-log`](https://www.npmjs.com/package/y-append-log), marked experimental. The tests that show all of the
+above are in [the repo](https://github.com/KarolNov/y-providers).

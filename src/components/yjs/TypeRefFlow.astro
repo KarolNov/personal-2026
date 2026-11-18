@@ -1,0 +1,100 @@
+---
+// How a nested type travels between a Yjs v13 client and a v14 client. v14 has one node type and writes a
+// v13 type reference ("typeRef") for each nested node: the one it arrived with, or an XML type for a node it
+// created itself. Plain HTML and CSS, so it reads without JavaScript and in both themes.
+interface Row {
+  from: string;
+  made: string;
+  wire: string;
+  seen: string;
+  ok: boolean;
+}
+
+const rows: Row[] = [
+  { from: 'v13', made: 'new Y.Map()', wire: 'typeRef 1 · YMap', seen: 'v14 Node, remembers 1 → back in v13 as Y.Map', ok: true },
+  { from: 'v14', made: 'new Y.Node()', wire: 'typeRef 4 · YXmlFragment', seen: 'v13 reads Y.XmlFragment, not Y.Map', ok: false },
+  { from: 'v14', made: "new Y.Node('p')", wire: "typeRef 3 · YXmlElement 'p'", seen: 'v13 reads Y.XmlElement <p>: getAttribute works, get() does not', ok: false },
+];
+---
+
+<figure class="flow">
+  <div class="head" aria-hidden="true">
+    <span>Created in</span><span>Encoded as</span><span>What the other side sees</span>
+  </div>
+  <ol>
+    {rows.map((r) => (
+      <li class:list={{ gap: !r.ok }}>
+        <span class="made"><span class="sr-only">Created in </span><b>{r.from}</b> <code>{r.made}</code></span>
+        <span class="wire"><span class="sr-only">Encoded as </span><code>{r.wire}</code></span>
+        <span class="seen"><span class="sr-only">{r.ok ? 'Works: ' : 'Breaks: '}</span><span aria-hidden="true">{r.ok ? '✓' : '✗'}</span> {r.seen}</span>
+      </li>
+    ))}
+  </ol>
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .flow {
+    margin: 2rem 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .head,
+  li {
+    display: grid;
+    grid-template-columns: 1.1fr 1.1fr 1.5fr;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .head {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+  }
+  li:last-child {
+    border-bottom: 0;
+  }
+  .wire code {
+    color: var(--muted);
+  }
+  .seen {
+    color: var(--success);
+  }
+  .gap .seen {
+    color: var(--danger);
+    font-weight: 600;
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  @media (max-width: 40rem) {
+    .head {
+      display: none;
+    }
+    li {
+      grid-template-columns: 1fr;
+      gap: 0.25rem;
+    }
+    .wire::before {
+      content: '→ ';
+      color: var(--muted);
+    }
+  }
+</style>
