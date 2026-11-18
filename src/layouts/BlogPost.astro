@@ -40,6 +40,19 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
   .prose :global(h2) { margin-top: 2.5rem; }
+  /* Inline code in running text. Code blocks and code inside components keep their own styling. */
+  .prose :global(:is(p, li, td, th, h2, h3, h4, blockquote, a) > code) {
+    padding: 0.1em 0.35em;
+    border: 1px solid var(--code-border);
+    border-radius: 6px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .prose :global(a > code) { color: inherit; }
   .prose :global(blockquote) {
     margin: 1.5rem 0; padding-left: 1rem; border-left: 3px solid var(--border); color: var(--muted);
   }
