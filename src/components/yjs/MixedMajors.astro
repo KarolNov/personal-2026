@@ -10,6 +10,14 @@
     <button type="button" data-reset disabled>Reset</button>
   </div>
 
+  <label class="hack">
+    <input type="checkbox" role="switch" data-hack disabled />
+    <span class="hack-text">
+      <span class="hack-title">Label v14 nodes as <code>Y.Map</code> <span class="hack-tag">private API</span></span>
+      <span class="hack-sub">Sets <code>_legacyTypeRef = 1</code> on each new unnamed <code>Y.Node()</code>, so v13 reads it as a map.</span>
+    </span>
+  </label>
+
   <div class="stage">
     <section class="client" data-client="v13" aria-label="v13 client">
       <div class="head">
@@ -35,10 +43,6 @@
       <div class="actions">
         <button type="button" data-add="node" disabled>+ <code>new Y.Node()</code></button>
         <button type="button" data-add="named" disabled>+ <code>new Y.Node('card')</code></button>
-        <label class="hack">
-          <input type="checkbox" data-hack disabled />
-          <span>label <code>new Y.Node()</code> as <code>Y.Map</code> (private API)</span>
-        </label>
       </div>
       <ul class="cards" data-cards aria-live="polite"></ul>
     </section>
@@ -126,13 +130,86 @@
     gap: 0.4rem;
     margin-bottom: 0.6rem;
   }
+  /* The private-API switch: a full-width strip above both clients, tinted while it's on. */
   .hack {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.8rem;
-    color: var(--muted);
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
     cursor: pointer;
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+  .hack:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  }
+  .hack:has(input:disabled) {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .hack input {
+    appearance: none;
+    flex: none;
+    position: relative;
+    width: 2.5rem;
+    height: 1.4rem;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--border);
+    cursor: inherit;
+    transition: background-color 150ms ease;
+  }
+  .hack input::after {
+    content: '';
+    position: absolute;
+    top: 0.2rem;
+    left: 0.2rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    transition: transform 200ms var(--ease-out);
+  }
+  .hack input:checked {
+    background: var(--accent);
+  }
+  .hack input:checked::after {
+    transform: translateX(1.1rem);
+  }
+  .hack input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .hack-text {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+  .hack-title {
+    font-weight: 600;
+  }
+  .hack-tag {
+    margin-left: 0.25rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .hack-sub {
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .hack-sub code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
   }
   .cards {
     list-style: none;
@@ -253,6 +330,9 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
+    .hack input::after {
+      transition: none;
+    }
     .cards :global(li),
     .wire-msg.flash {
       animation: none;
