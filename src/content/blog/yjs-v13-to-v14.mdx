@@ -6,6 +6,7 @@ tags: [yjs, crdt, sync engines]
 ---
 
 import TypeRefFlow from '../../components/yjs/TypeRefFlow.astro';
+import MixedMajors from '../../components/yjs/MixedMajors.astro';
 
 Yjs v14 is in release candidates as `@y/y`, and I wanted to see what it actually changes. I learn best from
 working code, so I took the local persistence and network sync I'd written for my Yjs playground and made them
@@ -96,8 +97,9 @@ two Vitest projects, with aliases pointing at one entry or the other, plus a CI 
 
 ## Can a v13 client and a v14 client share a document?
 
-I wrote the README saying "not supported" without trying it. Since the bytes are the same, I then tried it: a v13
-client and a v14 client syncing through one server, once with a v13 server and once with a v14 one.
+During a migration, some users will run the new version of an app while others are still on the old one. Since
+the bytes are the same, I tested what happens then: a v13 client and a v14 client syncing through one server, once
+with a v13 server and once with a v14 one.
 
 Most of it just works. Root text, maps and lists sync both ways. Formatting applied on either side reaches the
 other, and concurrent edits converge. Awareness works, 53-bit client IDs included. The server's major doesn't
@@ -118,6 +120,15 @@ The data isn't lost: a v14 client that joins later still reads every attribute, 
 stored the document and loaded it again. But a v13 app doing `cards.get(id).get('title')` gets a
 `Y.XmlFragment` (or a `Y.XmlElement`, if the node has a name) and can't read the title.
 
+You can try it below. Both clients run the real libraries, `yjs` 13.6 on the left and `@y/y` 14.0.0-rc.30 on
+the right, and every update one makes is applied to the other. Add a card on each side and compare how the v13
+client reads them.
+
+<MixedMajors>
+  The v13 client reads each card the way a v13 app would, as a `Y.Map`. Cards from v14 arrive as XML types unless
+  you tick the private-API box before adding one. The v14 client reads every card, whichever side made it.
+</MixedMajors>
+
 There's no public way to choose the label in v14. The label lives in a private field, and setting it before the
 node is inserted does work:
 
@@ -133,13 +144,15 @@ or create nested types only from v13 clients until everyone has moved.
 
 ## What I'd tell someone porting a provider
 
-- **Bytes are your friend.** If your provider only moves and stores updates, the port is mostly import paths.
+- **If you only move updates, the port is small.** A provider that sends and stores updates without reading the
+  document needs new import paths and little else.
 - **Don't switch versions at runtime.** Ship one entry point per major and check that each one reaches only its
   own Yjs.
 - **Run every test on both majors.** The differences I hit were all in test code that read documents, not in the
   providers themselves.
-- **Test the mixed case before you write it down.** I said it didn't work and was wrong. It almost works, and the
-  one gap is specific enough to explain.
+- **Test mixed clients, and say exactly what breaks.** Your users will run both majors side by side while they
+  migrate. Root types cross without trouble; nested types made in v14 don't. That's specific enough to put in
+  the README, which is more useful than "not supported".
 
 The packages are on npm as [`y-opfs`](https://www.npmjs.com/package/y-opfs),
 [`y-transport`](https://www.npmjs.com/package/y-transport) and

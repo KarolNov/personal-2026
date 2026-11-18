@@ -1,0 +1,423 @@
+---
+// A Yjs v13 client and a v14 client sharing one document, live in the page: the real `yjs` and `@y/y`,
+// connected directly (each update is applied to the other side). Add nested cards from either side and
+// see what type each side reads them as, and what label went over the wire.
+---
+
+<figure class="mixed" data-mixed>
+  <div class="bar">
+    <span class="title">A v13 and a v14 client, one document</span>
+    <button type="button" data-reset>Reset</button>
+  </div>
+
+  <div class="stage">
+    <section class="client" data-client="v13" aria-label="v13 client">
+      <div class="head">
+        <span class="name">v13 client</span>
+        <code class="pkg">yjs</code>
+      </div>
+      <div class="actions">
+        <button type="button" data-add="map">+ <code>new Y.Map()</code></button>
+      </div>
+      <ul class="cards" data-cards aria-live="polite"></ul>
+    </section>
+
+    <section class="wire" aria-label="What went over the wire">
+      <span class="wire-label">over the wire</span>
+      <p class="wire-msg" data-wire>Add a card on either side.</p>
+    </section>
+
+    <section class="client" data-client="v14" aria-label="v14 client">
+      <div class="head">
+        <span class="name">v14 client</span>
+        <code class="pkg">@y/y</code>
+      </div>
+      <div class="actions">
+        <button type="button" data-add="node">+ <code>new Y.Node()</code></button>
+        <button type="button" data-add="named">+ <code>new Y.Node('card')</code></button>
+        <label class="hack">
+          <input type="checkbox" data-hack />
+          <span>label as <code>Y.Map</code> (private API)</span>
+        </label>
+      </div>
+      <ul class="cards" data-cards aria-live="polite"></ul>
+    </section>
+  </div>
+  <p class="loading" data-loading>Loading both Yjs versions…</p>
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .mixed {
+    margin: 2rem 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: 0.92rem;
+  }
+  .bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+  }
+  .title {
+    font-weight: 600;
+  }
+  button {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: border-color 150ms ease, transform 150ms var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    button:hover {
+      border-color: var(--muted);
+    }
+  }
+  button:active {
+    transform: scale(0.97);
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  button code,
+  .hack code,
+  .pkg {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr 9.5rem 1fr;
+    gap: 0.75rem;
+    align-items: start;
+  }
+  .client {
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+  }
+  .name {
+    font-weight: 600;
+  }
+  .pkg {
+    color: var(--muted);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  .hack {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+  }
+  .cards :global(li) {
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 6px;
+    animation: pop 300ms var(--ease-out);
+  }
+  .cards :global(li.ok) {
+    border-left-color: var(--success);
+  }
+  .cards :global(li.bad) {
+    border-left-color: var(--danger);
+  }
+  .cards :global(.row) {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .cards :global(.key) {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .cards :global(.type) {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+  }
+  .cards :global(li.bad .type) {
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .cards :global(.read) {
+    margin-top: 0.2rem;
+    font-size: 0.85rem;
+  }
+  .cards :global(.read code) {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--muted);
+  }
+  .cards :global(.empty) {
+    color: var(--muted);
+    font-size: 0.85rem;
+    border: 0;
+    padding: 0.4rem 0;
+    animation: none;
+  }
+  .wire {
+    align-self: center;
+    text-align: center;
+  }
+  .wire-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 0.3rem;
+  }
+  .wire-msg {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+  .wire-msg :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+  .wire-msg :global(.arrow) {
+    display: block;
+    font-size: 1.1rem;
+    color: var(--accent);
+  }
+  .wire-msg.flash {
+    animation: flash 600ms var(--ease-out);
+  }
+  .loading {
+    margin: 0.75rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  figcaption {
+    margin-top: 0.85rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes flash {
+    from {
+      opacity: 0.2;
+    }
+  }
+  @media (max-width: 40rem) {
+    .stage {
+      grid-template-columns: 1fr;
+    }
+    .wire {
+      padding: 0.25rem 0;
+    }
+    /* Stacked: v13 above v14, so the arrows point down and up. */
+    .wire-msg :global(.arrow) {
+      transform: rotate(90deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cards :global(li),
+    .wire-msg.flash {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  type Side = 'v13' | 'v14';
+
+  // v13's numeric type references, as both majors write them in an update.
+  const TYPE_REFS: Record<string, number> = {
+    YArray: 0,
+    YMap: 1,
+    YText: 2,
+    YXmlElement: 3,
+    YXmlFragment: 4,
+    YXmlHook: 5,
+    YXmlText: 6,
+  };
+
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  async function setup(root: HTMLElement) {
+    const [Y13, Y14] = await Promise.all([import('yjs'), import('@y/y')]);
+    root.querySelector<HTMLElement>('[data-loading]')!.hidden = true;
+
+    const wire = root.querySelector<HTMLElement>('[data-wire]')!;
+    const list = (side: Side) => root.querySelector<HTMLElement>(`[data-client="${side}"] [data-cards]`)!;
+    const hack = root.querySelector<HTMLInputElement>('[data-hack]')!;
+
+    let d13: InstanceType<typeof Y13.Doc>;
+    let d14: InstanceType<typeof Y14.Doc>;
+    let count = 0;
+
+    // v13 class names, checked subclass first (an XmlElement is also an XmlFragment). Not `constructor.name`,
+    // which a minified build renames.
+    const CLASSES: Array<[string, new (...args: never[]) => unknown]> = [
+      ['YXmlElement', Y13.XmlElement],
+      ['YXmlFragment', Y13.XmlFragment],
+      ['YXmlHook', Y13.XmlHook],
+      ['YXmlText', Y13.XmlText],
+      ['YMap', Y13.Map],
+      ['YArray', Y13.Array],
+      ['YText', Y13.Text],
+    ];
+    const className = (value: unknown) =>
+      CLASSES.find(([, C]) => value instanceof C)?.[0] ?? (value === null ? 'null' : typeof value);
+
+    // The nested type labels inside an update: decode it with v13, which turns each label into a class.
+    function labels(update: Uint8Array): string[] {
+      const out: string[] = [];
+      for (const s of Y13.decodeUpdateV2(update).structs) {
+        const content = (s as { content?: unknown }).content;
+        if (content instanceof Y13.ContentType) {
+          const name = className(content.type);
+          out.push(`${name} · typeRef ${TYPE_REFS[name] ?? '?'}`);
+        }
+      }
+      return out;
+    }
+
+    function showWire(from: Side, update: Uint8Array) {
+      const found = labels(update);
+      const to = from === 'v13' ? 'v14' : 'v13';
+      wire.innerHTML =
+        `<span class="arrow">${from === 'v13' ? '→' : '←'}</span>` +
+        `${update.length} bytes, ${from} to ${to}` +
+        (found.length ? `<br>nested type: <code>${esc(found.join(', '))}</code>` : '');
+      wire.classList.remove('flash');
+      void wire.offsetWidth;
+      wire.classList.add('flash');
+    }
+
+    function render() {
+      // v13: read each card the way a v13 app would, as a Y.Map.
+      const cards13 = d13.getMap('cards');
+      const items13 = [...cards13.entries()].map(([key, value]) => {
+        const type = className(value);
+        const isMap = value instanceof Y13.Map;
+        const read = isMap
+          ? `<code>get('title')</code> → "${esc(String((value as InstanceType<typeof Y13.Map>).get('title')))}"`
+          : `<code>get('title')</code> → not a <code>Y.Map</code>, title unreadable`;
+        return `<li class="${isMap ? 'ok' : 'bad'}"><div class="row"><span class="key">${esc(key)}</span><span class="type">${esc(type)}</span></div><div class="read">${read}</div></li>`;
+      });
+      list('v13').innerHTML = items13.join('') || '<li class="empty">No cards yet.</li>';
+
+      // v14: one node type; read the title attribute.
+      const cards14 = d14.get('cards');
+      const attrs = cards14.getAttrs() as Record<string, unknown>;
+      const items14 = Object.entries(attrs).map(([key, node]) => {
+        const n = node as InstanceType<typeof Y14.Node>;
+        const title = n?.getAttr?.('title');
+        const name = (n as { name?: string | null }).name;
+        return `<li class="ok"><div class="row"><span class="key">${esc(key)}</span><span class="type">Node${name ? `('${esc(name)}')` : ''}</span></div><div class="read"><code>getAttr('title')</code> → "${esc(String(title))}"</div></li>`;
+      });
+      list('v14').innerHTML = items14.join('') || '<li class="empty">No cards yet.</li>';
+    }
+
+    function connect() {
+      d13 = new Y13.Doc();
+      d14 = new Y14.Doc();
+      count = 0;
+      d13.on('updateV2', (update: Uint8Array, origin: unknown) => {
+        if (origin === 'remote') return;
+        showWire('v13', update);
+        Y14.applyUpdateV2(d14, update, 'remote');
+      });
+      d14.on('updateV2', (update: Uint8Array, origin: unknown) => {
+        if (origin === 'remote') return;
+        showWire('v14', update);
+        Y13.applyUpdateV2(d13, update, 'remote');
+      });
+      d13.on('afterTransaction', render);
+      d14.on('afterTransaction', render);
+      wire.textContent = 'Add a card on either side.';
+      render();
+    }
+
+    root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
+      button.addEventListener('click', () => {
+        count += 1;
+        const key = `card${count}`;
+        const kind = button.dataset.add;
+        if (kind === 'map') {
+          d13.transact(() => {
+            const card = new Y13.Map<string>();
+            d13.getMap('cards').set(key, card);
+            card.set('title', `Card ${count} from v13`);
+          });
+        } else {
+          d14.transact(() => {
+            const card = new Y14.Node(kind === 'named' ? 'card' : null) as InstanceType<typeof Y14.Node> & {
+              _legacyTypeRef: number;
+            };
+            if (hack.checked) card._legacyTypeRef = TYPE_REFS.YMap;
+            d14.get('cards').setAttr(key, card);
+            card.setAttr('title', `Card ${count} from v14`);
+          });
+        }
+      });
+    });
+
+    root.querySelector('[data-reset]')!.addEventListener('click', () => {
+      d13.destroy();
+      d14.destroy();
+      connect();
+    });
+
+    connect();
+  }
+
+  // Load both Yjs versions only when the playground is about to scroll into view.
+  document.querySelectorAll<HTMLElement>('[data-mixed]').forEach((root) => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          setup(root).catch((error) => {
+            root.querySelector<HTMLElement>('[data-loading]')!.textContent = `Couldn't load Yjs: ${error}`;
+          });
+        }
+      },
+      { rootMargin: '300px' },
+    );
+    io.observe(root);
+  });
+</script>
