@@ -1,7 +1,7 @@
 ---
 import { Font } from 'astro:assets';
 import '../styles/global.css';
-import { SITE_TITLE } from '../consts';
+import { SITE_TITLE, TWITTER_HANDLE } from '../consts';
 
 interface Props {
   title: string;
@@ -16,6 +16,7 @@ const DEFAULT_IMAGE = '/og.png';
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const { title, description, image = DEFAULT_IMAGE } = Astro.props;
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
+const imageURL = new URL(image, Astro.site);
 ---
 
 <meta charset="utf-8" />
@@ -57,5 +58,14 @@ const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 <meta property="og:url" content={canonicalURL} />
 <meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
-<meta property="og:image" content={new URL(image, Astro.url)} />
+<meta property="og:site_name" content={SITE_TITLE} />
+<meta property="og:image" content={imageURL} />
+<meta property="og:image:alt" content={fullTitle} />
+<!-- X reads these before the og: ones; spelling them out avoids relying on its fallback. -->
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content={TWITTER_HANDLE} />
+<meta name="twitter:creator" content={TWITTER_HANDLE} />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imageURL} />
+<meta name="twitter:image:alt" content={fullTitle} />
