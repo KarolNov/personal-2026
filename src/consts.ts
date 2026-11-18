@@ -6,3 +6,4 @@ export const NAV = [
   { href: '/blog/', label: 'Blog' },
   { href: '/contact/', label: 'Contact' },
 ];
+export const TWITTER_HANDLE = '@KNovljakovic';
