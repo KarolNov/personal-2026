@@ -10,6 +10,8 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} image={heroImage?.src ?? `/og/${id}.png`} stagger={false}>
+  {/* The same post as Markdown, for agents (src/pages/blog/[...slug].md.ts). */}
+  <link slot="head" rel="alternate" type="text/markdown" title="This post as Markdown" href={new URL(`/blog/${id}.md`, Astro.site)} />
   <article>
     <header>
       <a class="back rise" href="/blog/"><span aria-hidden="true">←</span> All posts</a>

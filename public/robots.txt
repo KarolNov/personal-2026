@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 
 Sitemap: https://karolnov.dev/sitemap-index.xml
+
+# Plain-text site index for LLMs and agents: https://karolnov.dev/llms.txt
