@@ -99,8 +99,9 @@ two Vitest projects, with aliases pointing at one entry or the other, plus a CI 
 I wrote the README saying "not supported" without trying it. Since the bytes are the same, I then tried it: a v13
 client and a v14 client syncing through one server, once with a v13 server and once with a v14 one.
 
-Most of it just works. Root text, maps and lists sync both ways. Formatting and concurrent edits converge.
-Awareness works, 53-bit client IDs included. The server's major doesn't matter, and it loses nothing.
+Most of it just works. Root text, maps and lists sync both ways. Formatting applied on either side reaches the
+other, and concurrent edits converge. Awareness works, 53-bit client IDs included. The server's major doesn't
+matter, and it loses nothing, whether it keeps the document in memory or in storage.
 
 The catch is nested types. A v13 update labels each nested type with a number, its type reference: 1 for a map,
 2 for text, 4 for an XML fragment, and so on. v13 needs that label to know which class to create. v14 doesn't, since
@@ -113,8 +114,9 @@ has one.
   reaches v13 as an XML type, so v13 code that expects a `Y.Map` there won't find its keys.
 </TypeRefFlow>
 
-The data isn't lost: a v14 client that joins later still reads every attribute. But a v13 app doing
-`cards.get(id).get('title')` gets a `Y.XmlFragment` and can't read the title.
+The data isn't lost: a v14 client that joins later still reads every attribute, even after the server has
+stored the document and loaded it again. But a v13 app doing `cards.get(id).get('title')` gets a
+`Y.XmlFragment` (or a `Y.XmlElement`, if the node has a name) and can't read the title.
 
 There's no public way to choose the label in v14. The label lives in a private field, and setting it before the
 node is inserted does work:
