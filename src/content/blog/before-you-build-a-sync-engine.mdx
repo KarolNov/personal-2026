@@ -160,9 +160,9 @@ are true:
   data security.
 - **You need a say in every change.** You have to validate, normalise or reject edits before they land, enforce
   permissions on parts of a document, or let AI agents edit next to people safely. On Flex we wanted room to grow
-  into fine-grained permissions, and owning the pipeline is what made AI edits straightforward to add. It moved us
-  from simply syncing state both ways to a pipeline where every change states what it means to do and is checked
-  before it's applied.
+  into fine-grained permissions, and owning the server is what made AI edits straightforward to add. It moved us
+  from simply syncing state both ways to a server that checks each update from a client and normalises the
+  document back to a valid state whenever a write breaks a rule.
 - **Sync is the product.** Collaboration is why people choose you, so its edge cases are your problem whatever
   you use.
 - **Your data has an awkward shape.** Trees where things move, like a DOM, documents mixing text with layout,

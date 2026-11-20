@@ -1,0 +1,297 @@
+---
+title: Conflict-free doesn't mean correct
+description: A CRDT promises every copy ends up the same, not that the result makes sense. How the shape of your data decides what merges well, how to repair what still breaks, and why getting the shape right early pays off when you add features.
+pubDate: 2026-11-20
+tags: [sync engines, crdt, collaboration, data modelling]
+draft: false
+---
+
+import ClipPlayground from '../../components/sync/ClipPlayground.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+import SchemaTree from '../../components/sync/SchemaTree.astro';
+
+[Part one](/blog/before-you-build-a-sync-engine/) ended on a warning. A CRDT guarantees that every copy of the
+document *converges*: they all end up the same. It says nothing about whether the thing they all agree on makes
+sense. Each field merges fine on its own, and together they break a rule your app depends on.
+
+This is the part of building a sync engine that no library can do for you, because the rules are yours. The good
+news is that most of the fix happens before you write any sync code, in how you shape your data. Get the shape
+right early and most conflicts resolve themselves. Whatever's left, you repair in one or two well-chosen places.
+The shape also decides how easily you can add features later, which is the part I underestimated most.
+
+<SeriesNav current="conflict-free-is-not-correct" />
+
+## What "conflict-free" actually promises
+
+The "conflict-free" in CRDT is a promise about *replicas*, not about *meaning*. Apply the same set of changes, in
+any order, any number of times, and every copy lands on the same state. No copy ever has to stop and ask a person
+which version to keep.
+
+To keep that promise, a CRDT needs a rule for every pair of concurrent changes, and it needs every copy to apply
+the same rule. For the fields of a record, the usual rule is **last write wins, per key**. Each key keeps one
+value, and when two people write it at the same time, a fixed rule picks the winner the same way on every copy. A
+`Y.Map` takes the write from the higher client id. Liveblocks' `LiveObject` and
+[Figma's properties](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/) take whichever write
+reached the server last.
+
+It's a good rule. It's simple, it's predictable, and two people rarely edit the same field at the same moment. The
+problem is the word *per*. The rule looks at one key at a time. Your app doesn't.
+
+## A clip that ends before it starts
+
+Picture a video editor. A clip on the timeline has a point where it starts (`in`) and a point where it ends
+(`out`). The obvious way to store it is two fields:
+
+```ts
+const clip = doc.getMap('clip');
+clip.set('in', 2);
+clip.set('out', 9);
+```
+
+Alice drags the whole clip five seconds to the right, so her client writes `in: 7` and `out: 14`. At the same time,
+Bob drags the clip's end four seconds to the left, so his client writes `out: 5`. Each of them made a perfectly
+valid edit. Press **Move + trim** and watch what the merge makes of it:
+
+<ClipPlayground mode="inOut">
+  Under each copy are the fields it's stored as, with the stamp of the write that won (`1·A` is Alice's first
+  write; the demo orders writes with a Lamport clock, standing in for whichever rule your library uses). Alice's
+  `in` and Bob's `out` both win their key, so the clip ends up running from 7s to 5s. Try
+  **Trim both ends** too, or drag the clips yourself; take one client offline to make the overlap as long as you
+  like.
+</ClipPlayground>
+
+Every copy agrees. The status says **In sync**. And the clip has a negative length. No step went wrong: both
+writes were valid, both arrived, and the CRDT applied its rule correctly to each key. The bug is in the data
+model. `in` and `out` aren't independent values, but we stored them as if they were, so the merge treated them
+as if they were.
+
+This isn't specific to timelines. Anything with two fields that only make sense together has the same shape: a
+calendar event's start and end, a crop box, a table cell's row span and the rows it spans, a "type" field and the
+fields that only exist for one type. Look for **rules that span more than one field**. Every one of them is a
+place where a per-field merge can break.
+
+## Decide what last-write-wins applies to
+
+If the problem is that last-write-wins splits two values that belong together, the first fix is to stop splitting
+them. Store the range as one value, and the merge has to take all of it or none of it:
+
+```ts
+clip.set('range', { in: 7, out: 14 }); // a plain object in a Y.Map is one value, merged as a unit
+```
+
+<ClipPlayground mode="whole">
+  The same two edits. Now Bob's write replaces the whole range, so the clip stays valid, and Alice's move is gone.
+  Her screen jumps back without a word.
+</ClipPlayground>
+
+That's valid, and it's also wrong in a quieter way: one person's work disappears. Make the value bigger and you
+make conflicts more likely, all the way up to "send the whole document", which is where
+[part one started](/blog/before-you-build-a-sync-engine/#attempt-one-send-the-whole-thing). Make it smaller and
+you're back to negative clips. You want values that are **as small as possible, and no smaller**. When values have
+to stay consistent with each other, I'd lean towards keeping them in a single attribute. Losing one of two
+concurrent edits is a price people barely notice. A broken element they notice straight away.
+
+Before you merge values into one, ask a different question: what do people actually change on their own? Nobody
+thinks "I'll set the out point and leave the in point alone" while moving a clip. They think "move it" or "make it
+shorter". Store the clip the way people edit it, as where it starts and how long it is, and each common edit
+touches exactly one field:
+
+```ts
+clip.set('start', 2);
+clip.set('length', 7);
+```
+
+<ClipPlayground mode="startLength">
+  **Move + trim** now merges the way both people meant it: Alice's move writes `start`, Bob's trim writes `length`,
+  and the clip ends up at 7s–10s. Then try **Trim both ends**. Trimming the start changes both fields, so the two
+  edits collide on `length` again. The result is valid, but Bob's end lands at 10s, where neither of them put it.
+</ClipPlayground>
+
+Same data, same CRDT, different shape, and the most common conflict is gone. That's the cheapest fix in this whole
+series, and you only get it cheaply at the start. Once clips are stored with `in` and `out` in thousands of
+documents, changing the shape is a migration with old clients still online, which is [part three](#series).
+
+It isn't a complete fix, though. Some edits always touch more than one field, and some rules span whole records.
+For those, you need somewhere to repair what the merge produced.
+
+## Let the server repair the merge
+
+Clients write straight into their local Yjs document, and a provider syncs the changes to the server, as with any
+Yjs setup. After an update from a client arrives, the server can run a normaliser over the parts of the document
+it touched. The normaliser makes sure the document is in a valid state, and where it isn't, fixes it. The fix is
+an ordinary write to the same document, so it syncs back to every client like any other change.
+
+The rules should be blunt. An element that ends up with a negative width just gets a width of 0. A clip that ends
+before it starts is pushed out to the shortest length the app allows, and keeps where it starts:
+
+```ts
+function normaliseClip(clip: Y.Map<number>) {
+  const start = clip.get('in')!;
+  if (clip.get('out')! < start + MIN_LENGTH) clip.set('out', start + MIN_LENGTH);
+}
+```
+
+<ClipPlayground mode="normalise">
+  The same two fields as the first demo, but the server checks every merge. When Alice's move lands on top of Bob's
+  trim, it writes `out` back as 9s (stamped `·S`) and sends the fix to both clients. Watch the clients, though: each
+  one shows the broken clip until the fix arrives. Turn on **fix on read** to hide that gap.
+</ClipPlayground>
+
+This works, but for a clip it's the wrong tool. A clip is two numbers on one line, and the shape fix from earlier
+already makes most of these conflicts disappear. Repairs earn their place in a model that's already stored and
+shipped, where changing the shape is expensive, and in rules no shape can keep.
+
+Take another example, from a design tool. Elements have a position mode, `static`, `absolute` or `fixed`, and
+separately an `x` and a `y`. A static element sits in the document flow, so it has no use for `x` and `y`. Now
+picture a client working from a stale copy of the document. Someone else has already switched an element to static, but this client hasn't
+seen that yet, so it moves the element and writes `x` and `y`. Each key merges fine on its own, and the result is a
+static element with coordinates it shouldn't have. The normaliser rejects that write: after the update is merged,
+it removes the coordinates a static element can't have, and the document is valid again.
+
+```ts
+function normalisePosition(el: Y.Map<unknown>) {
+  if (el.get('position') === 'static' && (el.has('x') || el.has('y'))) {
+    el.delete('x');
+    el.delete('y');
+  }
+}
+```
+
+Nothing here asks the clients to change how they write, and it works with any CRDT and any provider. It's also
+where rules that span records belong: two clips on the same track mustn't overlap, an element can't point at an
+image someone just deleted. No choice of fields on one record can protect a rule about two.
+
+The result isn't always what either person meant. In the demo, Bob's trim mostly disappears; in the position
+example, the move is thrown away. But it's always valid, it's the same for everyone, and it can't be skipped by a
+client that's buggy or out of date. Keep the rules **deterministic and idempotent**: running the normaliser twice,
+or on two servers, must give the same document.
+
+Look at the position example again, though. That rule exists because of a modelling choice. Had position been one
+value, shaped differently per mode, the invalid state couldn't be stored in the first place:
+
+```ts
+type Position =
+  | { mode: 'static' }
+  | { mode: 'absolute' | 'fixed'; x: number; y: number };
+
+el.set('position', { mode: 'absolute', x: 40, y: 120 });
+```
+
+The stale move and the switch to static would collide on one value, and one would win. For moving an element that's
+about to stop being movable, that's the right outcome, and there's no rule to write.
+
+## Fix on read for what slips through
+
+Server repairs take a round trip. Until the fix arrives, each client is looking at the broken merge, and a
+renderer that assumes a positive length can throw. Documents written before a rule existed won't have been
+repaired at all. So before the app sees the data, each client reads it through the same rules, without writing
+anything back. That's what the **fix on read** toggle in the demo above does.
+
+```ts
+function readClip(clip: Y.Map<number>): Clip {
+  const start = clip.get('in') ?? 0;
+  const end = Math.max(clip.get('out') ?? start, start + MIN_LENGTH);
+  return { in: start, out: end };
+}
+```
+
+The read fix has to agree with the server's: every client, on every version, must produce the same result from the
+same stored state, or you've built a new way for copies to disagree. Keep the rules few and boring, and write them
+down next to the schema. Reading through them is also your safety net when the normaliser has a bug. Stored data
+outlives the code that wrote it.
+
+And assume the read fix will miss something too. Build the UI so that one bad value can't take the whole document
+down with it. Clamp a negative width to 0 where you draw it, fall back to a default when a value is missing or the
+wrong type, and wrap each element in its own error boundary so a broken one renders as a placeholder instead of
+blanking the canvas. None of these layers has to be perfect, because there are several of them: the shape of the
+data, the server's normaliser, the read fix and a UI that survives what gets past all three.
+
+## Going further: send intents, not values
+
+There's one more step, and it's the one [Replicache](https://doc.replicache.dev/concepts/how-it-works) takes.
+Look at what went over the wire in every demo so far: `out 5s`. That's a value, the
+*result* of what Bob did, worked out against the clip as he saw it. What Bob did was "drag the end four seconds
+left". If that's what you send, the server can apply it to the clip as it is *now*, after Alice's move:
+
+```ts
+type ClipOp =
+  | { kind: 'move'; clipId: string; by: number }
+  | { kind: 'trimStart'; clipId: string; by: number }
+  | { kind: 'trimEnd'; clipId: string; by: number };
+```
+
+The server applies operations in the order they arrive and runs your rules on each one before it lands. Clients
+show the server's latest state with their own unconfirmed operations replayed on top, so edits still feel instant.
+
+<ClipPlayground mode="intent">
+  The pills now carry what each person did. The server applies them in order and sends back the result. Under each
+  client you can see its confirmed state and anything still queued. In **Trim both ends**, the second trim would
+  cross the first, so the server shortens it to the minimum length and says so in its log.
+</ClipPlayground>
+
+Edits merge closer to what people meant, and nothing invalid is ever stored, not even for a moment. The cost is
+that you've left the CRDT's model behind. Every client edit becomes an operation you define, version and replay,
+and offline edits need a server to make sense of them. For a canvas where most edits are "set this property",
+writing values and repairing on the server gets you most of the way for much less work.
+
+## The shape you pick now decides what you can add later
+
+This is the part I'd tell myself earlier. The data model isn't only about today's conflicts. Every feature you add
+later either fits the shape you picked or fights it.
+
+- **New variants.** Say the product asks for `sticky` positioning, with its own offset. With position as one value
+  shaped per mode, `sticky` is a new variant with its own fields, and the merge already treats it as a unit. With
+  `position`, `x` and `y` as separate keys, it's another mode that leaves fields behind, and another case for the
+  normaliser.
+- **New properties.** `start` and `length` can take a playback speed later without changing meaning. `in` and `out`
+  start arguing with it the moment someone asks whether `out` is in source time or timeline time.
+- **New rules.** With repairs in one place on the server, a new rule is a new check. Old documents get fixed the
+  next time they're written, and with a read fix they look right before that, without updating any client.
+- **New editors.** AI agents writing into the same document go through the same repairs as people. A shape where
+  invalid states can't be stored is the cheapest guardrail you'll ever give an agent.
+- **New ways to edit.** If you'll need permissions on actions ("reviewers can trim but not move"), ripple edits, or
+  undo that knows a trim happened rather than that `out` changed, those push you towards intents.
+
+None of these is impossible with the wrong shape. Each one is harder, and each one adds another place where a
+merge can break a rule.
+
+## Before you settle on a document schema
+
+I would start by drawing the schema as a tree. Put each record at the root, each field it stores at a leaf, and
+nest values that only make sense together under one branch. Then list the rules your app depends on and see which
+fields each one touches.
+
+<SchemaTree>
+  A rule that lands inside one branch can be kept by storing that
+  branch as one value. A rule that reaches across branches can break in a merge, and one that reaches into another
+  record can only be checked on the server.
+</SchemaTree>
+
+The tree makes the groups visible. Fields under one branch tend to share rules, and a rule that has to reach across
+branches shows you either a grouping that's off or a check that belongs on the server. Then go through these
+questions, in this order:
+
+1. **Which rules span more than one field?** List them. Start and end, a mode and the fields only one mode uses,
+   totals and the items they total. Each one is a place a per-field merge can break.
+2. **What do people change on their own?** Make those your fields. If one common gesture writes two fields, the
+   fields are probably the wrong shape.
+3. **Which values must change together?** Store them as one value, and accept that concurrent edits to it will
+   overwrite each other.
+4. **Can the shape make invalid states impossible?** A value shaped per type or mode can't hold fields that type
+   doesn't use. That's one less repair to write.
+5. **Which rules span records?** Those need a repair on the server.
+6. **What does every reader do with invalid data?** Write one deterministic read fix per rule, next to the schema.
+   Then make the UI survive whatever gets past it anyway.
+7. **What will you add next year?** New modes, new properties, AI edits, permissions. Check that your shape has
+   room for them.
+
+<div id="series">
+  <SeriesNav current="conflict-free-is-not-correct" />
+</div>
+
+Further reading: Matt Weidner's [CRDT survey, part 2](https://mattweidner.com/2023/09/26/crdt-survey-2.html) on
+designing data so it merges the way people expect, and Martin Kleppmann's
+[CRDTs: the hard parts](https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html).
+
+Next up: you've picked a good shape, and a year later you need a different one. How to change a schema while old
+clients are still online, writing the old shape into the same document.

@@ -1,0 +1,343 @@
+---
+// One design-tool element drawn as a tree, stored two ways side by side: every field as its own
+// key, or fields that share a rule grouped into one value. Pick a rule to see which fields it
+// touches, and whether a per-key merge can break it in each shape.
+
+type Node = { key: string; field?: string; note?: string; group?: boolean; children?: Node[] };
+type Shape = 'flat' | 'grouped';
+
+const TREES: Record<Shape, Node[]> = {
+  flat: [
+    { key: 'mode', field: 'mode', note: 'static · absolute · fixed' },
+    { key: 'x', field: 'x' },
+    { key: 'y', field: 'y' },
+    { key: 'width', field: 'width' },
+    { key: 'height', field: 'height' },
+    { key: 'parent', field: 'parent', note: '→ another record' },
+  ],
+  grouped: [
+    {
+      key: 'position',
+      group: true,
+      note: 'one value, shaped per mode',
+      children: [
+        { key: 'mode', field: 'mode' },
+        { key: 'x', field: 'x', note: 'absolute · fixed only' },
+        { key: 'y', field: 'y' },
+      ],
+    },
+    {
+      key: 'size',
+      group: true,
+      note: 'one value',
+      children: [
+        { key: 'width', field: 'width' },
+        { key: 'height', field: 'height' },
+      ],
+    },
+    { key: 'parent', field: 'parent', note: '→ another record' },
+  ],
+};
+
+type Verdict = { tone: 'bad' | 'good' | 'server'; text: string };
+const RULES: { id: string; label: string; fields: string[]; verdict: Record<Shape, Verdict> }[] = [
+  {
+    id: 'mode',
+    label: 'Static means no x or y',
+    fields: ['mode', 'x', 'y'],
+    verdict: {
+      flat: {
+        tone: 'bad',
+        text: 'Three separate keys. A stale move writes x and y onto an element someone just made static. Needs a repair.',
+      },
+      grouped: {
+        tone: 'good',
+        text: 'All under one value. The move and the switch to static collide, and one of them wins whole. Nothing to repair.',
+      },
+    },
+  },
+  {
+    id: 'ratio',
+    label: 'Size keeps its ratio',
+    fields: ['width', 'height'],
+    verdict: {
+      flat: {
+        tone: 'bad',
+        text: 'Two keys. Two people resizing at once can end up with one width and the other height. Needs a repair.',
+      },
+      grouped: {
+        tone: 'good',
+        text: 'One value. One resize wins whole, so the ratio holds. The other resize is lost.',
+      },
+    },
+  },
+  {
+    id: 'frame',
+    label: 'Stays inside its frame',
+    fields: ['x', 'y', 'width', 'height', 'parent'],
+    verdict: {
+      flat: {
+        tone: 'server',
+        text: 'Reaches into another record, the parent frame. No shape of this element can keep it. Check it on the server.',
+      },
+      grouped: {
+        tone: 'server',
+        text: 'Still reaches into the parent frame. Grouping fields inside one element can’t help. Check it on the server.',
+      },
+    },
+  },
+];
+const SHAPE_TITLE: Record<Shape, string> = { flat: 'Every field its own key', grouped: 'Grouped by rule' };
+const TONE_LABEL = { bad: 'Can break', good: 'Kept by the shape', server: 'Server check' };
+---
+
+<figure class="schema" data-schema data-rule="mode">
+  <div class="bar">
+    <span class="title">One element, stored two ways</span>
+  </div>
+  <figcaption><slot /></figcaption>
+
+  <div class="rules" role="group" aria-labelledby="schema-rules-label">
+    <span class="rules-label" id="schema-rules-label">Pick a rule</span>
+    <div class="rule-list">
+      {RULES.map((r) => (
+        <button type="button" class="rule" data-pick-rule={r.id} data-fields={r.fields.join(' ')} aria-pressed="false">
+          {r.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <div class="body">
+    {(Object.keys(TREES) as Shape[]).map((shape) => (
+      <section class="shape" data-tree={shape}>
+        <h4 class="shape-title">{SHAPE_TITLE[shape]}</h4>
+        <div class="tree-wrap">
+          <span class="root">element</span>
+          <ul class="tree">
+            {TREES[shape].map((n) => (
+              <li class:list={{ group: n.group }}>
+                {n.group ? (
+                  <div class="box" data-box>
+                    <span class="node branch">
+                      <span class="key">{n.key}</span>
+                      {n.note && <span class="note">{n.note}</span>}
+                    </span>
+                    <ul class="tree">
+                      {n.children!.map((c) => (
+                        <li>
+                          <span class="node" data-field={c.field}>
+                            <span class="key">{c.key}</span>
+                            {c.note && <span class="note">{c.note}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <span class="node" data-field={n.field}>
+                    <span class="key">{n.key}</span>
+                    {n.note && <span class="note">{n.note}</span>}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div class="verdicts" aria-live="polite">
+          {RULES.map((r) => (
+            <p class:list={['verdict', r.verdict[shape].tone]} data-verdict={r.id}>
+              <strong>{TONE_LABEL[r.verdict[shape].tone]}.</strong> {r.verdict[shape].text}
+            </p>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+</figure>
+
+<style>
+  .schema {
+    --w: min(50rem, 100vw - 2.5rem);
+    --line: light-dark(#d9d3ca, #3a3132);
+    --hit: var(--accent);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .title { font-weight: 600; }
+
+
+  .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0 1rem 1.1rem;
+  }
+  .shape {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.7rem 0.75rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+  }
+  .shape-title { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
+  .tree-wrap { flex: 1; }
+  @media (max-width: 40rem) {
+    .body { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ---- The tree ---- */
+  .tree-wrap { font: 0.82rem/1.3 var(--font-mono); min-width: 0; }
+  .root { display: inline-block; padding: 0.2rem 0.5rem; font-weight: 600; }
+
+  .tree { list-style: none; margin: 0; padding: 0 0 0 0.95rem; }
+  .tree li { position: relative; padding: 0.18rem 0 0.18rem 1.1rem; }
+  /* An elbow into each child, and a vertical rail past every child but the last. */
+  .tree li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0.9rem;
+    height: calc(0.18rem + 0.85em);
+    border-left: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    border-bottom-left-radius: 6px;
+  }
+  .tree li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--line);
+  }
+
+  .node {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.6rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transition: background-color 200ms, border-color 200ms, color 200ms;
+  }
+  .note { font-family: var(--font-sans); font-size: 0.75rem; color: var(--muted); }
+  .branch .key { font-weight: 600; }
+  .node.hit {
+    color: var(--hit);
+    background: color-mix(in srgb, var(--hit) 12%, transparent);
+    border-color: color-mix(in srgb, var(--hit) 35%, transparent);
+  }
+
+  /* A value stored as one unit: the merge takes all of it or none of it. */
+  .box {
+    padding: 0.15rem 0.6rem 0.35rem 0;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    transition: border-color 200ms, background-color 200ms;
+  }
+  .box > .tree { padding-left: 1.4rem; }
+  .box.hit { border-color: var(--hit); border-style: solid; background: color-mix(in srgb, var(--hit) 4%, transparent); }
+
+  /* ---- Rules ---- */
+  .rules { padding: 0.9rem 1rem; }
+  .rules-label { display: block; margin-bottom: 0.5rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  /* Equal columns, so every rule is the same size; one per row on narrow screens. */
+  .rule-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
+  @media (max-width: 40rem) {
+    .rule-list { grid-template-columns: minmax(0, 1fr); }
+  }
+  .rule {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 2.4rem;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: border-color 160ms, background-color 160ms, color 160ms, transform 120ms var(--ease-out);
+  }
+  .rule:hover { border-color: color-mix(in srgb, var(--fg) 25%, var(--border)); }
+  .rule:active { transform: scale(0.96); }
+  .rule[aria-pressed='true'] { border-color: var(--hit); color: var(--hit); background: color-mix(in srgb, var(--hit) 10%, var(--bg)); }
+
+  .verdict {
+    display: none;
+    margin: 0;
+    padding: 0.6rem 0.75rem;
+    border-left: 3px solid var(--tone);
+    border-radius: 0 8px 8px 0;
+    background: color-mix(in srgb, var(--tone) 8%, transparent);
+    font-size: 0.86rem;
+    line-height: 1.5;
+  }
+  .verdict strong { color: var(--tone); }
+  .verdict.bad { --tone: var(--danger); }
+  .verdict.good { --tone: var(--success); }
+  .verdict.server { --tone: light-dark(#2459d6, #7aa7ff); }
+  .verdict.shown { display: block; animation: verdict-in 220ms var(--ease-out); }
+  @keyframes verdict-in { from { opacity: 0; translate: 0 4px; } }
+
+  figcaption { padding: 0.8rem 1rem 0; color: var(--muted); font-size: 0.88rem; }
+  figcaption:empty { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .verdict.shown { animation: none; }
+  }
+</style>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-schema]')) {
+    const update = () => {
+      const rule = root.dataset.rule!;
+      const pick = root.querySelector<HTMLElement>(`[data-pick-rule="${rule}"]`)!;
+      const fields = new Set(pick.dataset.fields!.split(' '));
+
+      for (const b of root.querySelectorAll<HTMLElement>('[data-pick-rule]'))
+        b.setAttribute('aria-pressed', String(b.dataset.pickRule === rule));
+      for (const n of root.querySelectorAll<HTMLElement>('[data-field]'))
+        n.classList.toggle('hit', fields.has(n.dataset.field!));
+      // Light a group's outline only when the rule lives entirely inside it.
+      for (const box of root.querySelectorAll<HTMLElement>('[data-box]')) {
+        const inside = [...box.querySelectorAll<HTMLElement>('[data-field]')].map((n) => n.dataset.field!);
+        box.classList.toggle('hit', [...fields].every((f) => inside.includes(f)));
+      }
+      for (const v of root.querySelectorAll<HTMLElement>('[data-verdict]'))
+        v.classList.toggle('shown', v.dataset.verdict === rule);
+    };
+
+    root.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-pick-rule]');
+      if (!t) return;
+      root.dataset.rule = t.dataset.pickRule;
+      update();
+    });
+    update();
+  }
+</script>
