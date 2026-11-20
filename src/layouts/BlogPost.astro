@@ -10,6 +10,8 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} image={heroImage?.src ?? `/og/${id}.png`} stagger={false}>
+  {/* The same post as Markdown, for agents (src/pages/blog/[...slug].md.ts). */}
+  <link slot="head" rel="alternate" type="text/markdown" title="This post as Markdown" href={new URL(`/blog/${id}.md`, Astro.site)} />
   <article>
     <header>
       <a class="back rise" href="/blog/"><span aria-hidden="true">←</span> All posts</a>
@@ -40,12 +42,25 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
   .prose :global(h2) { margin-top: 2.5rem; }
+  /* Inline code in running text. Code blocks and code inside components keep their own styling. */
+  .prose :global(:is(p, li, td, th, h2, h3, h4, blockquote, a) > code) {
+    padding: 0.1em 0.35em;
+    border: 1px solid var(--code-border);
+    border-radius: 6px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .prose :global(a > code) { color: inherit; }
   .prose :global(blockquote) {
     margin: 1.5rem 0; padding-left: 1rem; border-left: 3px solid var(--border); color: var(--muted);
   }
   /* Tables bleed past the text column like the playgrounds do. `separate` borders keep the
      rounded outline; cells draw only their bottom and left edges. */
-  .prose :global(table) {
+  .prose > :global(table) {
     --w: min(50rem, 100vw - 2.5rem);
     width: var(--w);
     margin: 2.25rem calc((100% - var(--w)) / 2);
@@ -54,16 +69,16 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
     border-collapse: separate; border-spacing: 0;
     font-size: 0.9rem; line-height: 1.45;
   }
-  .prose :global(:is(th, td)) {
+  .prose > :global(table :is(th, td)) {
     padding: 0.55rem 0.8rem; text-align: left; vertical-align: top;
     border-bottom: 1px solid var(--border);
   }
-  .prose :global(:is(th, td) + :is(th, td)) { border-left: 1px solid var(--border); }
-  .prose :global(tbody tr:last-child > *) { border-bottom: 0; }
-  .prose :global(thead th) { font-weight: 600; }
-  .prose :global(tbody td:first-child) { font-weight: 500; }
+  .prose > :global(table :is(th, td) + :is(th, td)) { border-left: 1px solid var(--border); }
+  .prose > :global(table tbody tr:last-child > *) { border-bottom: 0; }
+  .prose > :global(table thead th) { font-weight: 600; }
+  .prose > :global(table tbody td:first-child) { font-weight: 500; }
   /* Markdown tables get no wrapper, so on phones the table itself becomes the scroll box. */
   @media (max-width: 40rem) {
-    .prose :global(table) { display: block; overflow-x: auto; }
+    .prose > :global(table) { display: block; overflow-x: auto; }
   }
 </style>

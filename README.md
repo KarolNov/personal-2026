@@ -1,54 +1,94 @@
-# personal-2026
+# karolnov.dev
 
-Repo of my personal website and blog refresh - Nov 2026.
+[![karolnov.dev](public/og.png)](https://karolnov.dev)
 
-Built with [Astro 7](https://astro.build) and deployed as a single [Cloudflare Worker](https://developers.cloudflare.com/workers/)
-(static assets + on-demand routes) via `@astrojs/cloudflare`.
+Source for **[karolnov.dev](https://karolnov.dev)**, my personal site and blog. I'm a principal software engineer
+building complex web products, and I write here about sync engines, collaboration and working with AI.
 
-## What's inside
+It's built with [Astro](https://astro.build) and runs as a single [Cloudflare Worker](https://developers.cloudflare.com/workers/):
+pages are prerendered and served as static assets, and the few routes that need a server run on demand at the edge.
+
+## Worth a look
+
+- **Interactive posts.** Posts are MDX, so they can embed live demos:
+  - [Before you build a sync engine](https://karolnov.dev/blog/before-you-build-a-sync-engine/) has a two-client
+    playground where you go offline, make conflicting edits and watch them merge
+    ([`src/components/sync/`](src/components/sync/)).
+  - [Show, don't prompt](https://karolnov.dev/blog/show-dont-prompt/) has animated chat and PR examples
+    ([`src/components/ai/`](src/components/ai/)).
+- **The About page.** A red ball rides a rail down the margin as you scroll and stretches into the
+  highlight under each heading ([`src/scripts/scroll-ball.ts`](src/scripts/scroll-ball.ts)). My GitHub contribution
+  graph loads in a [server island](https://docs.astro.build/en/guides/server-islands/) that's cached at the edge, with a
+  build-time copy shown until it arrives.
+- **Generated social cards.** Each post gets its own Open Graph image, rendered at build time with Satori and resvg
+  ([`src/pages/og/[slug].png.ts`](src/pages/og/[slug].png.ts)).
+- **A contact form with no third-party backend.** An [Astro Action](https://docs.astro.build/en/guides/actions/)
+  validates the message, checks [Turnstile](https://developers.cloudflare.com/turnstile/) on the server (and fails closed),
+  and sends it through [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/).
+- **Light and dark themes** that follow your system, with a toggle that remembers your choice. Try the
+  [404 page](https://karolnov.dev/nope) too.
+
+## Stack
+
+| | |
+|---|---|
+| Framework | Astro 7, MDX, content collections with typed frontmatter |
+| Hosting | Cloudflare Workers via `@astrojs/cloudflare` (static assets + on-demand routes) |
+| Contact form | Astro Actions, Turnstile, Email Routing `send_email` binding |
+| Social images | Satori + resvg at build time |
+| Feeds | RSS (`/rss.xml`) and sitemap |
+
+## Layout
 
 | Route | Rendering | Source |
 |-------|-----------|--------|
-| `/` landing page | prerendered | `src/pages/index.astro` |
-| `/about/` | prerendered | `src/pages/about.astro` |
-| `/blog/`, `/blog/<slug>/` | prerendered | `src/pages/blog/`, posts in `src/content/blog/` |
-| `/rss.xml`, `/sitemap-index.xml` | prerendered | `src/pages/rss.xml.ts`, `@astrojs/sitemap` |
-| `/contact/` | on demand (Worker) | `src/pages/contact.astro` + `src/actions/index.ts` |
+| `/` | prerendered | [`src/pages/index.astro`](src/pages/index.astro) |
+| `/about/` | prerendered, graph is a server island cached for 1 h, then stale-while-revalidate for a day | [`src/pages/about.astro`](src/pages/about.astro) |
+| `/blog/`, `/blog/<slug>/` | prerendered | [`src/pages/blog/`](src/pages/blog/), posts in [`src/content/blog/`](src/content/blog/) |
+| `/rss.xml`, `/sitemap-index.xml` | prerendered | [`src/pages/rss.xml.ts`](src/pages/rss.xml.ts), `@astrojs/sitemap` |
+| `/contact/` | on demand | [`src/pages/contact.astro`](src/pages/contact.astro), [`src/actions/index.ts`](src/actions/index.ts) |
 
-- **Blog** — Markdown/MDX content collection with typed frontmatter (`src/content.config.ts`).
-  Set `draft: true` to hide a post from production builds (still visible in `npm run dev`).
-- **Contact form** — an [Astro Action](https://docs.astro.build/en/guides/actions/) that validates input,
-  blocks bots with [Turnstile](https://developers.cloudflare.com/turnstile/) (verified server-side in
-  `src/lib/turnstile.ts`) plus a honeypot field, and emails the message to you through
-  [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/) (free) via a `send_email` binding
-  (`src/lib/mail.ts`). Email Routing can only send to verified destination addresses, which is all a contact form needs.
-  The Turnstile widget needs JavaScript.
+Set `draft: true` in a post's frontmatter to keep it out of production builds. Drafts still show in `npm run dev`.
 
-## Commands
+## Running it locally
 
-| Command | Action |
-|---------|--------|
-| `npm install` | Install dependencies |
-| `npm run dev` | Dev server at `localhost:4321` (runs in workerd) |
+Needs Node 22.12 or newer.
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars
+npm run dev
+```
+
+The dev server runs at `localhost:4321` inside workerd, so it behaves like production. `.dev.vars.example` holds
+Cloudflare's Turnstile *test* keys, which always pass. Email is simulated locally: sent messages are logged and
+written under `.wrangler/tmp/email/`.
+
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | Dev server |
 | `npm run build` | Build to `./dist/` |
-| `npm run preview` | Build and preview the production Worker locally |
-| `npm run check` | Type-check `.astro`/`.ts` files |
+| `npm run preview` | Build and run the production Worker locally |
+| `npm run check` | Type-check `.astro` and `.ts` files |
 | `npm run deploy` | Build and deploy with Wrangler |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc` |
 
-For local development, `cp .dev.vars.example .dev.vars` — it holds Cloudflare's Turnstile *test* keys (always pass).
-Locally, the email binding is simulated — sent messages are logged to the console and written under `.wrangler/tmp/email/`.
+## Deploying your own copy
 
-## Before the first deploy
+The config in [`wrangler.jsonc`](wrangler.jsonc) points at `karolnov.dev`, so change the route, `CONTACT_FROM` and
+`TURNSTILE_SITEKEY` to your own first. Then:
 
-The site is served at **https://karolnov.dev** (custom domain route in `wrangler.jsonc`).
+1. Add your domain to your Cloudflare account and run `npx wrangler login`.
+2. Turn on Email Routing and verify the inbox that should receive messages:
+   `npx wrangler email routing enable <domain>`, then `npx wrangler email routing addresses create <inbox>`, and click
+   the link in the verification email. Store the same address with `npx wrangler secret put CONTACT_TO`.
+3. Create a Turnstile widget (managed mode) for your domain. Put its sitekey in `TURNSTILE_SITEKEY` and store the
+   secret with `npx wrangler secret put TURNSTILE_SECRET`.
+4. Run `npm run deploy`. Wrangler attaches the domain to the Worker and provisions the certificate.
 
-1. Make sure the `karolnov.dev` zone is on your Cloudflare account, then `npx wrangler login`.
-2. Enable Email Routing and verify where contact messages should land:
-   `npx wrangler email routing enable karolnov.dev`, then
-   `npx wrangler email routing addresses create <your inbox>` and click the link in the verification email.
-   Store that same address as a secret: `npx wrangler secret put CONTACT_TO`.
-   Messages are sent from `blog@karolnov.dev` (`CONTACT_FROM` in `wrangler.jsonc`).
-3. Create a Turnstile widget (Dashboard → Turnstile → Add widget, managed mode) for `karolnov.dev`, put its
-   sitekey in `TURNSTILE_SITEKEY` in `wrangler.jsonc`, and store the secret: `npx wrangler secret put TURNSTILE_SECRET`
-4. `npm run deploy` — Wrangler attaches `karolnov.dev` to the Worker and provisions the certificate.
+## License
+
+You're free to use anything here as long as you credit me. The code is [MIT](LICENSE), so keep the copyright
+notice. The posts, photos and video are [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), so credit
+Karol Novljaković and link to [karolnov.dev](https://karolnov.dev). The Geist fonts belong to Vercel and are under the
+SIL Open Font License. The [LICENSE](LICENSE) file has the details.

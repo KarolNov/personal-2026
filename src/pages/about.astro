@@ -1,5 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ContributionGraph from '../components/ContributionGraph.astro';
+import LiveContributionGraph from '../components/LiveContributionGraph.astro';
+import { getContributions } from '../lib/contributions';
+import { GITHUB_LOGIN, GITHUB_URL, LINKEDIN_URL, TWITTER_HANDLE } from '../consts';
+
+// The page is prerendered with the contribution graph as of the build; the live island
+// (src/components/LiveContributionGraph.astro) swaps in current data after load.
+const github = GITHUB_LOGIN;
+const contributions = await getContributions(github);
 
 const roles = [
   {
@@ -98,6 +107,16 @@ const roles = [
       deciding what's worth building. Those years of writing it by hand are why I can review their work
       properly and stand behind what ships.
     </p>
+    {/* A stable wrapper for the ball to stop at: the island swaps the graph inside it. */}
+    {/* Greys the graph out before it paints, for the scroll ball to wake (src/scripts/scroll-ball.ts). */}
+    <script is:inline>
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('graph-asleep');
+    </script>
+    <div class="graph">
+      <LiveContributionGraph server:defer login={github}>
+        {contributions && <ContributionGraph slot="fallback" calendar={contributions} login={github} />}
+      </LiveContributionGraph>
+    </div>
     <p>
       I like small teams with clear goals, and products shaped by evidence about their users.
     </p>
@@ -117,11 +136,21 @@ const roles = [
     <h2>Elsewhere</h2>
     <p class="elsewhere">
       <a class="touch" href="/contact/">Get in touch</a>
-      <span><span class="muted">or find me on</span> <a href="https://github.com/KarolNov">GitHub</a> · <a href="https://www.linkedin.com/in/karol-nov/">LinkedIn</a></span>
+      <span><span class="muted">or find me on</span> <a href={GITHUB_URL}>GitHub</a> · <a href={LINKEDIN_URL}>LinkedIn</a> · <a href={`https://x.com/${TWITTER_HANDLE.slice(1)}`}>X</a></span>
     </p>
   </section>
 
-  <canvas class="trail" aria-hidden="true"></canvas>
+  <svg class="trail" aria-hidden="true">
+    <defs>
+      <linearGradient id="trail-fade" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="currentColor" stop-opacity="0" />
+        <stop offset="1" stop-color="currentColor" stop-opacity="0.45" />
+      </linearGradient>
+    </defs>
+    <path class="track" />
+    <path class="junctions" />
+    <path class="trail-line" stroke="url(#trail-fade)" />
+  </svg>
   <span class="ball" aria-hidden="true"></span>
 </BaseLayout>
 
@@ -129,24 +158,40 @@ const roles = [
   .lede { font-size: 1.2rem; color: var(--muted); }
   section { margin-top: 4.5rem; }
   h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It starts as the
-     underline under the page title, drops into the left margin, and at each role and section
-     lands on the heading and stretches into an underline before dropping back into the margin.
-     At the end it fills in the "Get in touch" button. A fading trail follows it. Both sit
-     behind the text. */
+  /* A red ball rides along as you scroll, driven by src/scripts/scroll-ball.ts. It runs down a
+     rail in the left margin (stepping around the contribution graph where it reaches past) with a
+     dot level with each stop. At the title or a heading it
+     stretches across into an underline; reaching the contribution graph wakes it; at the end it
+     fills in the "Get in touch" button. The rail and dots are drawn faintly, and a fading trail
+     follows the ball. All of it sits behind the text. */
   :global(main) { position: relative; }
-  /* The bounce can overshoot the window edge; don't let that scroll the page sideways. */
+  /* Nothing should scroll the page sideways. */
   :global(body) { overflow-x: clip; }
   h1, h2 { width: fit-content; }
   .trail {
-    /* Sized and moved by the script; it sits on the page so it scrolls with the ball. */
+    /* Laid over main; the script draws the track in main's coordinates, and of the trail only
+       the stretch the ball just covered. */
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
     z-index: -1;
     pointer-events: none;
     animation: none;
+    color: var(--accent-bg);
   }
+  .trail path {
+    fill: none;
+    stroke-width: 0.3rem;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  /* The track and a dot at each stop, quietly in the background. */
+  .trail .track,
+  .trail .junctions { stroke: var(--border); }
+  .trail .track { stroke-width: 1.5px; }
+  .trail .junctions { stroke-width: 7px; }
   .ball {
     position: absolute;
     top: 0;
@@ -157,7 +202,8 @@ const roles = [
     background: var(--accent-bg);
     z-index: -1;
     pointer-events: none;
-    /* Driven by the script; opt out of the page entrance and start hidden until it's placed. */
+    /* Driven by the script, size included; opt out of the page entrance and start hidden until
+       it's placed. */
     animation: none;
     visibility: hidden;
   }
@@ -209,10 +255,18 @@ const roles = [
     .touch:hover:not(.lit) { background: var(--accent-bg); }
   }
 
+  /* A year of days in the text column makes for tiny squares on a desktop, so where there's room the
+     graph widens past the column on both sides, centred on it (up to 56rem, keeping 2rem clear of
+     the screen edges). It never gets narrower than the column. */
+  .graph {
+    --wide: max(100%, min(56rem, 100vw - 4rem));
+    width: var(--wide);
+    margin-left: calc((100% - var(--wide)) / 2);
+  }
+
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
-    .ball { transition: opacity 150ms var(--ease-out); }
   }
 </style>
 

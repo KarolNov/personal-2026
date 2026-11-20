@@ -1,0 +1,503 @@
+---
+// A team chat played out twice: once with the answer pasted straight from an LLM, once answered by a person.
+// Every message is in the HTML, so without JavaScript both threads simply read top to bottom. The script
+// hides them and replays one thread at a time, with typing indicators and the wall of text scrolling past.
+
+interface Person {
+  name: string;
+  role: string;
+  initials: string;
+  tone: 'pm' | 'eng';
+}
+type Part =
+  | { kind: 'p'; text: string }
+  | { kind: 'h'; text: string }
+  | { kind: 'ul'; items: string[] }
+  | { kind: 'clip'; title: string; length: string };
+interface Message {
+  from: Person;
+  time: string;
+  parts: Part[];
+  /** How long the other side is "typing" before the message lands, in ms. */
+  typing: number;
+  wall?: boolean;
+}
+
+const maya: Person = { name: 'Maya', role: 'Product', initials: 'M', tone: 'pm' };
+const alex: Person = { name: 'Alex', role: 'Engineering', initials: 'A', tone: 'eng' };
+const question = 'Quick one: are we good to turn on the new CSV export for everyone on Friday? 🙏';
+
+const wall: Part[] = [
+  {
+    kind: 'p',
+    text: 'Great question! Rolling out a CSV export feature to your entire customer base is a significant milestone that requires careful consideration across several key dimensions. Here’s a comprehensive breakdown:',
+  },
+  { kind: 'h', text: '1. Technical readiness' },
+  {
+    kind: 'ul',
+    items: [
+      'Ensure the feature has been thoroughly tested across a wide range of data sizes and edge cases.',
+      'Consider the performance implications of exporting large datasets.',
+      'Verify that error handling is robust and user-friendly.',
+    ],
+  },
+  { kind: 'h', text: '2. Risk assessment' },
+  {
+    kind: 'ul',
+    items: [
+      'Friday releases carry inherent risk, as reduced weekend staffing may delay incident response.',
+      'Consider a phased rollout or feature flag to mitigate potential issues.',
+    ],
+  },
+  { kind: 'h', text: '3. Stakeholder alignment' },
+  {
+    kind: 'ul',
+    items: [
+      'Communicate timelines clearly to customer success, support and sales teams.',
+      'Prepare comprehensive documentation and release notes.',
+    ],
+  },
+  { kind: 'h', text: '4. Monitoring and success metrics' },
+  {
+    kind: 'ul',
+    items: [
+      'Define KPIs such as adoption rate, export success rate and support ticket volume.',
+      'Set up alerts for elevated error rates.',
+    ],
+  },
+  {
+    kind: 'p',
+    text: 'In summary, whether to launch on Friday ultimately depends on your team’s specific context, risk tolerance and readiness. By carefully weighing these factors, you can make an informed decision that balances speed with stability. Let me know if you’d like me to help draft a rollout plan! 🚀',
+  },
+];
+
+const scenes = [
+  {
+    id: 'dont',
+    label: 'Don’t',
+    messages: [
+      { from: maya, time: '10:02', typing: 0, parts: [{ kind: 'p', text: question }] },
+      { from: alex, time: '10:02', typing: 900, wall: true, parts: wall },
+      { from: maya, time: '10:09', typing: 1600, parts: [{ kind: 'p', text: '…so is that a yes?' }] },
+      { from: alex, time: '10:09', typing: 1100, parts: [{ kind: 'p', text: 'one sec, I’ll ask it' }] },
+    ] as Message[],
+    stats: [
+      ['Took to write', 'about 6 seconds'],
+      ['Takes to read', 'READ'],
+      ['Answer', 'still none'],
+    ],
+  },
+  {
+    id: 'do',
+    label: 'Do',
+    messages: [
+      { from: maya, time: '10:02', typing: 0, parts: [{ kind: 'p', text: question }] },
+      {
+        from: alex,
+        time: '10:06',
+        typing: 2400,
+        parts: [
+          {
+            kind: 'p',
+            text: 'Not for everyone yet. Exports over ~50k rows time out. I hit it in staging this morning, clip below. The fix is in review, so Tuesday is realistic.',
+          },
+          { kind: 'clip', title: 'Export timing out at 60k rows', length: '0:30' },
+        ],
+      },
+      {
+        from: alex,
+        time: '10:06',
+        typing: 1000,
+        parts: [{ kind: 'p', text: 'We could turn it on for the beta customers on Friday. None of them export that much. Want me to?' }],
+      },
+      {
+        from: maya,
+        time: '10:07',
+        typing: 1300,
+        parts: [{ kind: 'p', text: 'Yes please 👍 I’ll tell CS it’s Tuesday for everyone else.' }],
+      },
+    ] as Message[],
+    stats: [
+      ['Took to write', 'a few minutes'],
+      ['Takes to read', 'READ'],
+      ['Answer', 'beta Friday, everyone Tuesday'],
+    ],
+  },
+];
+
+// Reading time for everything after the question, at a generous 230 words a minute.
+const words = (m: Message[]) =>
+  m
+    .slice(1)
+    .flatMap((msg) => msg.parts)
+    .map((p) => (p.kind === 'ul' ? p.items.join(' ') : p.kind === 'clip' ? '' : p.text))
+    .join(' ')
+    .split(/\s+/)
+    .filter(Boolean).length;
+const readTime = (n: number) => {
+  const s = Math.round((n / 230) * 60);
+  return s < 60 ? `${Math.max(5, Math.round(s / 5) * 5)} seconds` : `about ${Math.round(s / 30) / 2} minutes`;
+};
+---
+
+<figure class="chat" data-chat>
+  <div class="bar">
+    <span class="channel"><span class="hash">#</span>csv-export-launch</span>
+    <div class="actions" role="group" aria-label="Choose a version of the conversation">
+      {scenes.map((s) => (
+        <button type="button" class:list={['pick', s.id]} data-pick={s.id} aria-pressed="false">
+          <span class="mark" aria-hidden="true">{s.id === 'dont' ? '✕' : '✓'}</span>
+          {s.label}
+        </button>
+      ))}
+      <button type="button" class="replay" data-replay aria-label="Replay conversation">↻</button>
+    </div>
+  </div>
+
+  {scenes.map((scene) => (
+    <section class="scene" data-scene={scene.id} aria-label={`${scene.label}: example conversation`}>
+      <h3 class="scene-title"><span class:list={['mark', scene.id]}>{scene.id === 'dont' ? '✕' : '✓'}</span> {scene.label}</h3>
+      <div class="window" data-window>
+        <ol class="thread">
+          {scene.messages.map((m) => (
+            <li class:list={['msg', m.from.tone, { wall: m.wall }]} data-typing={m.typing}>
+              <span class="avatar" aria-hidden="true">{m.from.initials}</span>
+              <div class="body">
+                <p class="meta">
+                  <b>{m.from.name}</b> <span>{m.from.role}</span> <time>{m.time}</time>
+                </p>
+                {m.parts.map((p) =>
+                  p.kind === 'h' ? (
+                    <p class="h">{p.text}</p>
+                  ) : p.kind === 'ul' ? (
+                    <ul>{p.items.map((i) => <li>{i}</li>)}</ul>
+                  ) : p.kind === 'clip' ? (
+                    <span class="clip">
+                      <span class="play" aria-hidden="true">▶</span>
+                      <span class="clip-title">{p.title}</span>
+                      <span class="clip-len">{p.length}</span>
+                    </span>
+                  ) : (
+                    <p>{p.text}</p>
+                  ),
+                )}
+              </div>
+            </li>
+          ))}
+          <li class="typing" data-typing-row hidden aria-hidden="true">
+            <span class="avatar" />
+            <span class="dots"><i /><i /><i /></span>
+            <span class="who" />
+          </li>
+        </ol>
+      </div>
+      <dl class="stats" data-stats>
+        {scene.stats.map(([k, v]) => (
+          <div>
+            <dt>{k}</dt>
+            <dd>{v === 'READ' ? readTime(words(scene.messages)) : v}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  ))}
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .chat {
+    --pm: light-dark(#7a4bd1, #b596f2);
+    --eng: light-dark(#0f7b6c, #4fc7b4);
+    /* Wider than the text column where there's room, never wider than the screen. */
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .channel { font-weight: 600; }
+  .hash { color: var(--muted); margin-right: 0.1rem; }
+  /* The buttons only do something once the script runs. */
+  .actions { display: none; gap: 0.4rem; }
+  .chat.js .actions { display: flex; }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out), background-color 150ms, border-color 150ms, color 150ms;
+  }
+  button:hover { background: var(--border); }
+  button:active { transform: scale(0.96); }
+  .pick.dont { --c: var(--danger); }
+  .pick.do { --c: var(--success); }
+  .pick .mark { color: var(--c); font-weight: 700; }
+  .pick[aria-pressed='true'] {
+    border-color: var(--c);
+    background: color-mix(in srgb, var(--c) 12%, var(--bg));
+  }
+  .replay { padding-inline: 0.6rem; }
+  /* Nudge towards the good version once the bad one has played out. */
+  .pick.nudge { animation: nudge 1.4s var(--ease-in-out) 2; }
+  @keyframes nudge {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent); }
+  }
+
+  .scene + .scene { border-top: 1px solid var(--border); }
+  .chat.js .scene + .scene { border-top: 0; }
+  .chat.js .scene:not(.active) { display: none; }
+  .scene-title { margin: 0; padding: 0.8rem 1rem 0; font-size: 0.95rem; }
+  .chat.js .scene-title { display: none; }
+  .scene-title .mark.dont { color: var(--danger); }
+  .scene-title .mark.do { color: var(--success); }
+
+  .window { background: var(--bg); }
+  .chat.js .window {
+    height: 25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+  }
+  /* Only the script scrolls while a version plays. The reader gets the scrollbar back once it ends. */
+  .chat.js .window.playing { overflow-y: hidden; }
+  .thread { list-style: none; margin: 0; padding: 0.75rem 0.5rem 1rem; }
+
+  .msg, .typing {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.6rem;
+    padding: 0.45rem 0.5rem;
+    border-radius: 8px;
+  }
+  .msg.pm, .typing.pm { --who: var(--pm); }
+  .msg.eng, .typing.eng { --who: var(--eng); }
+  /* Two messages in a row from the same person read as one block, like any chat app. */
+  .msg.eng + .msg.eng, .msg.pm + .msg.pm { padding-top: 0; }
+  .msg.eng + .msg.eng .avatar, .msg.pm + .msg.pm .avatar { visibility: hidden; height: 0; }
+  .msg.eng + .msg.eng .meta, .msg.pm + .msg.pm .meta { display: none; }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 8px;
+    background: var(--who, var(--muted));
+    color: var(--surface);
+    font-weight: 700;
+  }
+  .body { min-width: 0; line-height: 1.5; }
+  .body p { margin: 0 0 0.35rem; }
+  .body p:last-child { margin-bottom: 0; }
+  .meta { font-size: 0.85rem; }
+  .meta span, .meta time { color: var(--muted); font-size: 0.78rem; margin-left: 0.3rem; }
+
+  .wall .body { font-size: 0.88rem; }
+  .wall .h { font-weight: 700; margin-top: 0.6rem; }
+  .wall ul { margin: 0 0 0.35rem; padding-left: 1.2rem; }
+  .wall li { margin: 0.1rem 0; }
+  .chat.js .msg.wall.in { animation: paste 380ms var(--ease-out); }
+
+  .clip {
+    display: inline-grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.35rem;
+    padding: 0.45rem 0.7rem 0.45rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 0.85rem;
+  }
+  .play {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 1.8rem;
+    border-radius: 5px;
+    background: var(--eng);
+    color: var(--surface);
+    font-size: 0.7rem;
+  }
+  .clip-title { font-weight: 600; }
+  .clip-len { color: var(--muted); font-family: var(--font-mono); font-size: 0.78rem; }
+
+  .typing { align-items: center; color: var(--muted); font-size: 0.82rem; }
+  .typing[hidden] { display: none; }
+  .typing .avatar { opacity: 0.55; }
+  .typing .who { grid-column: 2; margin-top: -0.4rem; }
+  .dots { display: inline-flex; gap: 0.25rem; padding: 0.55rem 0.7rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); justify-self: start; }
+  .dots i { width: 0.4rem; height: 0.4rem; border-radius: 99px; background: var(--muted); animation: bounce 1s infinite ease-in-out; }
+  .dots i:nth-child(2) { animation-delay: 0.15s; }
+  .dots i:nth-child(3) { animation-delay: 0.3s; }
+
+  .chat.js .msg { display: none; }
+  .chat.js .msg.in { display: grid; animation: arrive 320ms var(--ease-out); }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--border);
+    transition: opacity 400ms var(--ease-out), translate 400ms var(--ease-out);
+  }
+  .chat.js .stats:not(.in) { opacity: 0; translate: 0 0.3rem; }
+  .stats dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stats dd { margin: 0.1rem 0 0; font-weight: 600; }
+  [data-scene='dont'] .stats div:last-child dd { color: var(--danger); }
+  [data-scene='do'] .stats div:last-child dd { color: var(--success); }
+
+  figcaption { padding: 0 1rem 0.9rem; color: var(--muted); font-size: 0.88rem; }
+  figcaption:empty { display: none; }
+
+  @media (max-width: 34rem) {
+    .chat.js .window { height: 22rem; }
+    .stats { grid-template-columns: 1fr; }
+  }
+
+  @keyframes arrive { from { opacity: 0; translate: 0 0.5rem; } }
+  @keyframes paste { from { opacity: 0; scale: 0.98; } }
+  @keyframes bounce { 0%, 60%, 100% { translate: 0 0; } 30% { translate: 0 -0.25rem; } }
+  @media (prefers-reduced-motion: reduce) {
+    .chat * { animation: none !important; }
+  }
+</style>
+
+<script>
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const PAUSE = 650;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-chat]')) {
+    root.classList.add('js');
+    const picks = [...root.querySelectorAll<HTMLButtonElement>('[data-pick]')];
+    const scenes = new Map(
+      [...root.querySelectorAll<HTMLElement>('[data-scene]')].map((el) => [el.dataset.scene!, el]),
+    );
+    let run = 0;
+    let current = 'dont';
+
+    // Waits, but gives up as soon as another run has started, so a replay mid-way cancels cleanly.
+    const wait = (ms: number, token: number) =>
+      new Promise<boolean>((r) => setTimeout(() => r(token === run), reduceMotion.matches ? 0 : ms));
+
+    // Scrolls the window down over `ms`, slowly enough to feel like someone trying to read it.
+    const scrollTo = (win: HTMLElement, ms: number, token: number) =>
+      new Promise<void>((resolve) => {
+        const from = win.scrollTop;
+        const to = win.scrollHeight - win.clientHeight;
+        if (reduceMotion.matches || to <= from) {
+          win.scrollTop = to;
+          return resolve();
+        }
+        const start = performance.now();
+        const step = (now: number) => {
+          if (token !== run) return resolve();
+          const t = Math.min(1, (now - start) / ms);
+          win.scrollTop = from + (to - from) * (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+
+    // Switches to a version and resets it to just the question.
+    function show(id: string) {
+      current = id;
+      for (const b of picks) {
+        b.setAttribute('aria-pressed', String(b.dataset.pick === id));
+        b.classList.remove('nudge');
+      }
+      for (const [key, el] of scenes) el.classList.toggle('active', key === id);
+      for (const w of root.querySelectorAll<HTMLElement>('[data-window]')) w.classList.remove('playing');
+      const scene = scenes.get(id)!;
+      const msgs = [...scene.querySelectorAll<HTMLElement>('.msg')];
+      msgs.forEach((m, i) => m.classList.toggle('in', i === 0));
+      scene.querySelector<HTMLElement>('[data-stats]')!.classList.remove('in');
+      scene.querySelector<HTMLElement>('[data-typing-row]')!.hidden = true;
+      scene.querySelector<HTMLElement>('[data-window]')!.scrollTop = 0;
+      return scene;
+    }
+
+    async function play(id: string) {
+      const token = ++run;
+      const scene = show(id);
+      const win = scene.querySelector<HTMLElement>('[data-window]')!;
+      const msgs = [...scene.querySelectorAll<HTMLElement>('.msg')];
+      const typing = scene.querySelector<HTMLElement>('[data-typing-row]')!;
+      const stats = scene.querySelector<HTMLElement>('[data-stats]')!;
+      win.classList.add('playing');
+
+      for (const [i, msg] of msgs.entries()) {
+        if (i === 0) continue;
+        const delay = Number(msg.dataset.typing);
+        if (delay > 0) {
+          if (!(await wait(PAUSE, token))) return;
+          const tone = msg.classList.contains('pm') ? 'pm' : 'eng';
+          const name = msg.querySelector('.meta b')?.textContent ?? '';
+          typing.className = `typing ${tone}`;
+          typing.querySelector('.avatar')!.textContent = name[0] ?? '';
+          typing.querySelector('.who')!.textContent = `${name} is typing…`;
+          typing.hidden = false;
+          await scrollTo(win, 250, token);
+          if (!(await wait(delay, token))) return;
+          typing.hidden = true;
+        }
+        msg.classList.add('in');
+        if (msg.classList.contains('wall')) {
+          // The wall lands all at once, under the question. Then we try to read it.
+          if (!(await wait(900, token))) return;
+          await scrollTo(win, 3600, token);
+        } else {
+          await scrollTo(win, 300, token);
+        }
+        if (token !== run) return;
+      }
+      win.classList.remove('playing');
+      if (!(await wait(500, token))) return;
+      stats.classList.add('in');
+      if (id === 'dont') picks.find((b) => b.dataset.pick === 'do')?.classList.add('nudge');
+    }
+
+    for (const b of picks) b.addEventListener('click', () => play(b.dataset.pick!));
+    root.querySelector('[data-replay]')!.addEventListener('click', () => play(current));
+
+    // Show the first version straight away, and start playing it once it's on screen.
+    show('dont');
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          seen.disconnect();
+          play(current);
+        }
+      },
+      { threshold: 0.4 },
+    );
+    seen.observe(root);
+  }
+</script>

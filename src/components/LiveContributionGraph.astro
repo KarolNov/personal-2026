@@ -1,0 +1,24 @@
+---
+// The contribution graph as a server island (`server:defer`): the About page itself stays
+// prerendered and shows the graph as of the last build, then this swaps in current data.
+// Cloudflare caches the island for an hour, then serves it stale for up to a day while a fresh
+// copy renders in the background. If GitHub can't be read it answers 503, and Astro keeps the
+// build-time graph on the page.
+import ContributionGraph from './ContributionGraph.astro';
+import { getContributions } from '../lib/contributions';
+
+interface Props {
+  login: string;
+}
+
+const { login } = Astro.props;
+const calendar = await getContributions(login);
+
+if (calendar) {
+  Astro.cache.set({ maxAge: 60 * 60, swr: 60 * 60 * 24 });
+} else {
+  Astro.response.status = 503;
+}
+---
+
+{calendar && <ContributionGraph calendar={calendar} login={login} />}

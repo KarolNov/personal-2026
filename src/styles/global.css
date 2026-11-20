@@ -12,6 +12,10 @@
   --accent-bg: light-dark(#c41e3a, #8a1c2b);
   --accent-fg: light-dark(#ffffff, #f6e9eb);
   --selection: light-dark(#f6d3d8, #4a1820);
+  /* Inline code in prose: a warm tint of the page, a step off the surface. */
+  --code-bg: light-dark(#f1ede6, #251e1f);
+  --code-border: light-dark(#e3ddd3, #362d2e);
+  --code-fg: light-dark(#7a2433, #f0a8b1);
   --danger: light-dark(#b42318, #f97066);
   --success: light-dark(#067647, #47cd89);
   --radius: 10px;
