@@ -17,6 +17,8 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const { title, description, image = DEFAULT_IMAGE } = Astro.props;
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 const imageURL = new URL(image, Astro.site);
+// The default card and the generated post cards (src/pages/og) are all 1200×630 PNGs; hero images vary.
+const isCard = image === DEFAULT_IMAGE || image.startsWith('/og/');
 ---
 
 <meta charset="utf-8" />
@@ -62,6 +64,10 @@ const imageURL = new URL(image, Astro.site);
 <meta property="og:description" content={description} />
 <meta property="og:site_name" content={SITE_TITLE} />
 <meta property="og:image" content={imageURL} />
+{/* Without dimensions Slack and others must fetch the image to size it, and can fall back to a small thumbnail. */}
+{isCard && <meta property="og:image:type" content="image/png" />}
+{isCard && <meta property="og:image:width" content="1200" />}
+{isCard && <meta property="og:image:height" content="630" />}
 <meta property="og:image:alt" content={fullTitle} />
 <!-- X reads these before the og: ones; spelling them out avoids relying on its fallback. -->
 <meta name="twitter:card" content="summary_large_image" />
