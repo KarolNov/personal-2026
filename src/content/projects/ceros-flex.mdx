@@ -11,6 +11,8 @@ cover: ../../assets/projects/flex.jpg
 coverAlt: The Flex editor's Pages and Layers panels next to the page settings, with Design, Animate and Preview tabs above.
 links:
   - { label: Ceros Flex, href: 'https://www.ceros.com/flex' }
+  - { label: Try it free, href: 'https://admin.ceros.com/create-account' }
+  - { label: Developer docs, href: 'https://developers.ceros.com/' }
   - { label: Sync engine series, href: '/blog/before-you-build-a-sync-engine/' }
 ---
 
@@ -38,8 +40,10 @@ engineers, and today work on its architecture as an individual contributor repor
 - **Moved the sync engine to intent-based operations.** Two-way syncing became an operations pipeline where every
   change is validated, normalised and auto-fixed before it lands, so documents stay consistent across collaborators,
   offline edits and version history.
-- **Shaped how the DOM tree lives in the CRDT**, with fractional indexing so concurrent moves stay conflict-free and
-  cheap to observe on the client.
+- **Made observing Y.js changes fast.** A series of optimisations to how the editor observes and reacts to document
+  changes, so large documents and busy collaborative sessions stay responsive.
+- **Shaped undo/redo** for a multiplayer editor, where undo has to mean your own change and keep making sense alongside
+  everyone else's edits.
 - **Let customers bring Flex content into their own sites and apps** without relying on iframes.
 - **Worked on performance across the stack.** A few recent changes made server-side and static rendering around 30%
   faster.
@@ -50,7 +54,8 @@ engineers, and today work on its architecture as an individual contributor repor
 
 ## Read more
 
-The code is closed, but a lot of what I learned about sync is in the
+The code is closed, but Flex isn't: you can [sign up for a free trial](https://admin.ceros.com/create-account) and
+build something, and the [developer docs](https://developers.ceros.com/) are public. A lot of what I learned about sync is in the
 [Sync engines in practice](/blog/before-you-build-a-sync-engine/) series on this blog, starting with a playground where
 two clients go offline, make conflicting edits and merge. [Conflict-free doesn't mean correct](/blog/conflict-free-is-not-correct/)
 is about why the intent-based pipeline exists, and [Yjs v13 to v14](/blog/yjs-v13-to-v14/) covers the library underneath.
