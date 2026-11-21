@@ -1,0 +1,61 @@
+---
+title: Ceros Flex
+summary: A visual editor in the same family as Figma or Framer, with real-time collaboration, offline editing and version history.
+kind: work
+order: 1
+role: Lead, then Principal Software Engineer
+when: 2024 – now
+status: Live
+stack: [Next.js, Y.js, Lit / Web Components, WebSockets, NestJS, PostgreSQL, Turborepo, Vite, Vitest, Playwright, Terraform]
+cover: ../../assets/projects/flex.jpg
+coverAlt: The Flex editor's Pages and Layers panels next to the page settings, with Design, Animate and Preview tabs above.
+links:
+  - { label: Ceros Flex, href: 'https://www.ceros.com/flex' }
+  - { label: Try it free, href: 'https://admin.ceros.com/create-account' }
+  - { label: Developer docs, href: 'https://developers.ceros.com/' }
+  - { label: Sync engine series, href: '/blog/before-you-build-a-sync-engine/' }
+---
+
+import Video from '../../components/Video.astro';
+
+Flex is the rebuild of Ceros Studio: a client-heavy visual editor where people design interactive content together,
+online or offline, and can step back through its history. I joined it as the lead of a team of up to eight senior
+engineers, and today work on its architecture as an individual contributor reporting to the CTO.
+
+<Video
+  src="/media/projects/flex-demo.mp4"
+  poster="/media/projects/flex-demo.jpg"
+  label="The Flex editor: turning on fully responsive breakpoints for a page, then switching a menu from absolute to inline positioning."
+  loop
+>
+  Responsive variants and layout in the editor: a page goes fully responsive, then a menu switches from absolute to
+  inline positioning. From the [Flex page](https://www.ceros.com/flex).
+</Video>
+
+## What I did
+
+- **Set the frontend architecture.** Real-time collaboration with offline editing and version history on Y.js, an
+  extensible visual HTML editor built on Web Components, and a DSL that can be edited both visually and as code. That
+  last one made adding AI collaborators straightforward: they edit the same document people do.
+- **Moved the sync engine to intent-based operations.** Two-way syncing became an operations pipeline where every
+  change is validated, normalised and auto-fixed before it lands, so documents stay consistent across collaborators,
+  offline edits and version history.
+- **Made observing Y.js changes fast.** A series of optimisations to how the editor observes and reacts to document
+  changes, so large documents and busy collaborative sessions stay responsive.
+- **Shaped undo/redo** for a multiplayer editor, where undo has to mean your own change and keep making sense alongside
+  everyone else's edits.
+- **Let customers bring Flex content into their own sites and apps** without relying on iframes.
+- **Worked on performance across the stack.** A few recent changes made server-side and static rendering around 30%
+  faster.
+- **Testing at scale.** With QE and DevOps, an end-to-end pipeline of around 10,000 Playwright tests on custom AWS
+  runners, in 6–8 minutes on every PR.
+- **Grew people.** Helped my reports grow into staff and lead roles, and helped reshape engineering culture at Ceros
+  around quality, security and speed of delivery in the age of AI-assisted development.
+
+## Read more
+
+The code is closed, but Flex isn't: you can [sign up for a free trial](https://admin.ceros.com/create-account) and
+build something, and the [developer docs](https://developers.ceros.com/) are public. A lot of what I learned about sync is in the
+[Sync engines in practice](/blog/before-you-build-a-sync-engine/) series on this blog, starting with a playground where
+two clients go offline, make conflicting edits and merge. [Conflict-free doesn't mean correct](/blog/conflict-free-is-not-correct/)
+is about why the intent-based pipeline exists, and [Yjs v13 to v14](/blog/yjs-v13-to-v14/) covers the library underneath.

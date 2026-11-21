@@ -30,6 +30,14 @@
 :root[data-theme='light'] { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }
 
+/* Media shot in both themes: .on-light and .on-dark hide outside their theme, following the same
+   OS preference and toggle as the tokens. Hidden images aren't fetched, since they load lazily;
+   hidden video takes don't preload (see Video). */
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .on-dark { display: none !important; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .on-light { display: none !important; } }
+:root[data-theme='light'] .on-dark,
+:root[data-theme='dark'] .on-light { display: none !important; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -77,6 +85,40 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 .button:hover { filter: brightness(1.08); }
 .button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
 
+/* The quiet links between a list and its pages (blog posts, projects), so they don't compete with the title.
+   The arrow nudges toward where the link goes. */
+.back, .next { font-size: 0.9rem; color: var(--muted); text-decoration: none; transition: color 150ms ease; }
+.back > span, .next > span:last-child { display: inline-block; transition: transform 150ms var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .back:hover, .next:hover { color: var(--fg); }
+  .back:hover > span { transform: translateX(-2px); }
+  .next:hover > span:last-child { transform: translateX(2px); }
+}
+header .back { display: inline-block; margin-bottom: 1.25rem; }
+
+/* Inline code in running text. Code blocks and code inside components keep their own styling. */
+.prose :is(p, li, td, th, h2, h3, h4, blockquote, a) > code {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.prose a > code { color: inherit; }
+
+/* Media wider than the text column where there's room, never wider than the screen (Video, Figure). */
+.breakout {
+  --w: min(50rem, 100vw - 2.5rem);
+  width: var(--w);
+  margin: 2.25rem calc((100% - var(--w)) / 2);
+}
+.breakout > figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.88rem; }
+.breakout > figcaption:empty { display: none; }
+
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 ::selection { background: var(--selection); }
@@ -97,11 +139,11 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 @view-transition { navigation: auto; }
 
 ::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
-/* Pages differ in height and scroll, so morphing between their boxes swept content in from far
-   above when leaving a scrolled page. The group snaps to the new page; only the fades move. */
-::view-transition-group(page) { animation: none; }
-::view-transition-old(page) { animation: 150ms var(--ease-out) both page-out; }
-::view-transition-new(page) { animation: none; }
+/* The page moves as the root snapshot: that's the viewport as it was on screen, so leaving a
+   scrolled page fades out what you were looking at. A named `main` snapshotted its whole box and
+   landed at the new page's top, flashing the old page scrolled back up. */
+::view-transition-old(root) { animation: 150ms var(--ease-out) both page-out; }
+::view-transition-new(root) { animation: none; }
 
 @keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
 
@@ -109,8 +151,8 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
    sets data-nav). The slide replaces the stagger, which would move content diagonally. */
 :root[data-nav='forward'] { --nav-x: 1; }
 :root[data-nav='back'] { --nav-x: -1; }
-:root[data-nav]::view-transition-old(page) { animation: 120ms var(--ease-out) both nav-out; }
-:root[data-nav]::view-transition-new(page) { animation: 250ms var(--ease-out) 40ms both nav-in; }
+:root[data-nav]::view-transition-old(root) { animation: 120ms var(--ease-out) both nav-out; }
+:root[data-nav]::view-transition-new(root) { animation: 250ms var(--ease-out) 40ms both nav-in; }
 :root[data-nav] :is(.rise, .stagger > *) { animation: none; }
 
 @keyframes nav-out { to { opacity: 0; transform: translateX(calc(var(--nav-x) * -16px)); } }
@@ -119,8 +161,9 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 /* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
 .theme-transition * { view-transition-name: none !important; }
 .theme-transition::view-transition { pointer-events: none; }
-.theme-transition::view-transition-old(root),
-.theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+/* :root raises these above the page rules, which data-nav keeps matching after a navigation. */
+:root.theme-transition::view-transition-old(root),
+:root.theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }

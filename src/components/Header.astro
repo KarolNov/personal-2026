@@ -27,9 +27,22 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     view-transition-name: site-header;
   }
   .brand { font-weight: 700; color: var(--fg); text-decoration: none; }
-  nav { display: flex; gap: 1.25rem; align-items: center; }
-  /* On the narrowest phones the full gaps push the theme toggle past the edge. */
-  @media (max-width: 22.5rem) { nav { gap: 0.75rem; } }
+  nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; align-items: center; }
+  /* On phones the links get a row of their own, spread edge to edge with taller tap targets, and the theme toggle
+     moves up beside the name. */
+  @media (max-width: 40rem) {
+    header { position: relative; row-gap: 0.4rem; }
+    nav { width: 100%; justify-content: space-between; column-gap: 0.5rem; }
+    nav a { padding-block: 0.55rem; }
+    nav :global(.theme-toggle) {
+      position: absolute;
+      top: calc(1.5rem + 0.8lh - 1.375rem);
+      right: calc(var(--gutter, 1.25rem) - 0.75rem);
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+  }
+  @media (max-width: 22rem) { nav { font-size: 0.95rem; } }
   nav a { color: var(--muted); text-decoration: none; }
   nav a:hover, nav a[aria-current='page'] { color: var(--fg); }
 </style>

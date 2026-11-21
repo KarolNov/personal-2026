@@ -1,0 +1,64 @@
+---
+title: Weather Forecast for Linear
+summary: A team-load weather report for Linear. See who is overloaded now and who is about to be, and hand work over before the storm.
+kind: side
+order: 2
+when: "2026"
+status: Live
+stack: [GraphQL, GraphQL Yoga, Pothos, Preact, Hono, StyleX, Cloudflare Workers, D1, Durable Objects, Vitest]
+cover: ../../assets/projects/weather.jpg
+coverAlt: The demo board for a team called Avengers, with a card per person showing their weather, a four-week forecast and issue counts per quadrant.
+links:
+  - { label: Try the demo, href: 'https://weather.karolnov.dev/?demo=true' }
+  - { label: About the app, href: 'https://weather.karolnov.dev/about' }
+  - { label: Repo, href: 'https://github.com/KarolNov/linear-weather' }
+---
+
+import Figure from '../../components/Figure.astro';
+import Video from '../../components/Video.astro';
+import board from '../../assets/projects/weather.jpg';
+
+Each person's open issues in [Linear](https://linear.app) land in an Eisenhower matrix (Do, Schedule, Delegate, Drop).
+Their urgent load is compared with the team average, scaled to how much of a week they work and leaving out anyone on
+time off. That becomes weather: ☀️ ⛅ 🌧️ ⛈️ for today, and a forecast for the next few weeks based on when each issue
+turns urgent. A PM can see who's in a storm or about to be, and **Rebalance** suggests who should take what and makes
+the moves in Linear.
+
+<Video
+  src="/media/projects/linear-weather-demo.mp4"
+  poster="/media/projects/linear-weather-demo.jpg"
+  label="The demo board: storms now and in the weeks ahead, then Rebalance hands work over and every storm clears."
+  loop
+>
+  The demo workspace: Tony is in a storm now, and others over the next weeks. Rebalance hands today's urgent work over
+  in one go, then the work ahead of each storm, and the forecast clears.
+</Video>
+
+## Why I built it
+
+I wanted to learn GraphQL properly, from both ends. The app reads Linear's GraphQL API and serves its own schema on top
+of it, extending Linear's `Issue`, `User` and `Team` with fields like `quadrant`, `weather` and `forecast(weeks:)`. That
+gave me a reason to use most of what GraphQL offers: DataLoader batching, mutations that return their expected failures
+as union types, trusted documents and query limits, and subscriptions fed by Linear's webhooks.
+
+## How it's put together
+
+The rules for what counts as important or urgent are data, not code. Each team has a row in D1, and the engine is plain
+functions of rules, issues and a date. That's also what makes the forecast cheap: next week is the same function with a
+different date.
+
+I could have built a small REST service beside Linear that returns each person's weather. Instead the derived fields
+live on Linear's own types, so the board gets an issue's title and its quadrant in one query, and if nobody asks for a
+forecast, none is computed. The price is a batching layer and query limits, since a schema with cycles can be asked for
+a lot.
+
+Linear's rate limits shaped the queries I send it. They're hand-written `.graphql` files that codegen checks against
+Linear's schema. They ask only for the fields the matrix needs, in pages small enough to stay under Linear's complexity
+budget.
+
+Changes made in Linear show up on the board straight away: Linear's webhooks reach a Durable Object per team, which
+pushes the update to every open board over server-sent events.
+
+<Figure src={board} alt="The board with eight people: Tony Stark in a storm with 13 open issues, others sunny or cloudy, each with a four-week forecast.">
+  The board, with each person's weather, forecast and quadrant counts.
+</Figure>

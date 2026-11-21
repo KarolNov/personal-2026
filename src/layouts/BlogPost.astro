@@ -30,31 +30,11 @@ const { id, title, description, pubDate, updatedDate, heroImage } = Astro.props;
 </BaseLayout>
 
 <style>
-  /* Long posts get the way back at both ends, kept quiet so it doesn't compete with the title. */
-  .back { font-size: 0.9rem; color: var(--muted); text-decoration: none; transition: color 150ms ease; }
-  .back span { display: inline-block; transition: transform 150ms var(--ease-out); }
-  @media (hover: hover) and (pointer: fine) {
-    .back:hover { color: var(--fg); }
-    .back:hover span { transform: translateX(-2px); }
-  }
-  header .back { display: inline-block; margin-bottom: 1.25rem; }
+  /* Long posts get the way back at both ends (.back, in global.css). */
   .meta { margin: 0; font-size: 0.95rem; }
   header { margin-bottom: 2rem; }
   .prose { margin-bottom: 3rem; }
   .prose :global(h2) { margin-top: 2.5rem; }
-  /* Inline code in running text. Code blocks and code inside components keep their own styling. */
-  .prose :global(:is(p, li, td, th, h2, h3, h4, blockquote, a) > code) {
-    padding: 0.1em 0.35em;
-    border: 1px solid var(--code-border);
-    border-radius: 6px;
-    background: var(--code-bg);
-    color: var(--code-fg);
-    font-size: 0.85em;
-    overflow-wrap: anywhere;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-  }
-  .prose :global(a > code) { color: inherit; }
   .prose :global(blockquote) {
     margin: 1.5rem 0; padding-left: 1rem; border-left: 3px solid var(--border); color: var(--muted);
   }

@@ -1,40 +1,116 @@
 ---
-// A video with its own captions track, as wide as the playgrounds. Captions start on, since most people
-// scroll past with the sound off, and the player's menu turns them off.
+// A video as wide as the playgrounds. Narrated videos carry their own captions track, on by default, since
+// most people scroll past with the sound off, and the player's menu turns them off. A silent `loop` clip
+// (a screen recording standing in for a GIF) plays muted on its own, unless the reader prefers less motion.
 
 interface Props {
   src: string;
   poster: string;
-  captions: string;
+  /** WebVTT captions, for videos with narration. */
+  captions?: string;
   /** What the video shows, for screen readers. */
   label: string;
+  /** Silent, muted and looping, like a GIF. */
+  loop?: boolean;
+  /** Width / height of the recording; defaults to the walkthroughs' 1280 × 800. */
+  aspect?: string;
+  /** The same recording in dark mode, shown instead when the site is dark. */
+  dark?: { src: string; poster: string };
 }
-const { src, poster, captions, label } = Astro.props;
+const { src, poster, captions, label, loop = false, aspect = '1280 / 800', dark } = Astro.props;
+const takes = dark ? [{ src, poster, theme: 'on-light' }, { ...dark, theme: 'on-dark' }] : [{ src, poster, theme: undefined }];
 ---
 
-<figure class="video">
-  <video controls playsinline preload="metadata" poster={poster} aria-label={label}>
-    <source src={src} type="video/mp4" />
-    <track kind="captions" srclang="en" label="English" src={captions} default />
-  </video>
+<figure class="video breakout">
+  {takes.map(({ theme, ...take }) => (
+    <video
+      class={theme}
+      controls
+      playsinline
+      preload={dark ? 'none' : 'metadata'}
+      poster={take.poster}
+      aria-label={label}
+      style={{ aspectRatio: aspect }}
+      loop={loop}
+      muted={loop}
+      data-autoplay={loop ? '' : undefined}
+    >
+      <source src={take.src} type="video/mp4" />
+      {captions && <track kind="captions" srclang="en" label="English" src={captions} default />}
+    </video>
+  ))}
   <figcaption><slot /></figcaption>
 </figure>
 
-<style>
-  .video {
-    /* Wider than the text column where there's room, never wider than the screen. */
-    --w: min(50rem, 100vw - 2.5rem);
-    width: var(--w);
-    margin: 2.25rem calc((100% - var(--w)) / 2);
+<script>
+  // Loops start when they scroll into view and pause when they leave, unless the reader paused one or prefers less
+  // motion. A video shot in both themes has a take per theme: only the one on screen loads, and a theme switch hands
+  // its position and play state to the other, so the switch neither restarts it nor leaves it playing unseen.
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // A take hidden by the other theme is display: none, so it has no boxes.
+  const isShown = (video: HTMLVideoElement) => video.getClientRects().length > 0;
+  // Pauses made here, so the pause listener can tell them from the reader's.
+  const ours = new WeakSet<HTMLVideoElement>();
+  const pause = (video: HTMLVideoElement) => {
+    if (video.paused) return;
+    ours.add(video);
+    video.pause();
+  };
+  const play = (video: HTMLVideoElement) => video.play().catch(() => {});
+
+  const io = reduceMotion
+    ? undefined
+    : new IntersectionObserver(
+        (entries) => {
+          for (const { target, isIntersecting } of entries) {
+            const video = target as HTMLVideoElement;
+            // The other theme's take: theme switches look after it.
+            if (!isShown(video)) continue;
+            if (!isIntersecting) pause(video);
+            else if (video.closest<HTMLElement>('.video')?.dataset.userPaused === undefined) play(video);
+          }
+        },
+        { threshold: 0.4 },
+      );
+
+  const onThemeChange: (() => void)[] = [];
+  for (const figure of document.querySelectorAll<HTMLElement>('figure.video')) {
+    const takes = [...figure.querySelectorAll('video')];
+    let active = takes.find(isShown) ?? takes[0];
+    for (const video of takes) {
+      video.addEventListener('pause', () => {
+        if (!ours.delete(video)) figure.dataset.userPaused = '';
+      });
+      video.addEventListener('play', () => delete figure.dataset.userPaused);
+      if (video.dataset.autoplay !== undefined) io?.observe(video);
+    }
+    if (takes.length < 2) continue;
+    active.preload = 'metadata';
+    onThemeChange.push(() => {
+      const next = takes.find(isShown);
+      if (!next || next === active) return;
+      const prev = active;
+      active = next;
+      next.preload = 'metadata';
+      next.currentTime = prev.currentTime;
+      const playing = !prev.paused;
+      pause(prev);
+      if (playing) play(next);
+    });
   }
+  if (onThemeChange.length > 0) {
+    const sync = () => onThemeChange.forEach((fn) => fn());
+    new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sync);
+  }
+</script>
+
+<style>
   video {
     display: block;
     width: 100%;
-    aspect-ratio: 1280 / 800;
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) + 4px);
     background: var(--surface);
   }
-  figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.88rem; }
-  figcaption:empty { display: none; }
 </style>

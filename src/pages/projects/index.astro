@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProjectCard from '../../components/ProjectCard.astro';
+import { getProjects } from '../../lib/projects';
+
+const projects = await getProjects();
+const sections = [
+  {
+    title: 'Work',
+    intro: 'Products I built at Ceros and MarkUp.io. The code is closed, so these pages say what I did and what I learned.',
+    items: projects.filter((p) => p.data.kind === 'work'),
+  },
+  {
+    title: 'Side projects',
+    intro: 'Things I build in the open or for fun, mostly to learn something properly. Each one has a live demo or a repo.',
+    items: projects.filter((p) => p.data.kind === 'side'),
+  },
+];
+// Entrance order down the page, capped so the last items don't wait on a long list.
+let n = 2;
+const step = () => Math.min(n++, 8);
+---
+
+<BaseLayout title="Projects" description="Products I've built at work and side projects with demos and repos." stagger={false}>
+  <h1 class="rise">Projects</h1>
+  <p class="lede muted rise" style="--i: 1">
+    What I've built at work and on my own time. Open one for the story behind it, the stack, screenshots and links.
+  </p>
+
+  {sections.map((section) => (
+    <section>
+      <h2 class="rise" style={{ '--i': step() }}>{section.title}</h2>
+      <p class="intro muted rise" style={{ '--i': step() }}>{section.intro}</p>
+      <ul class="grid">
+        {section.items.map((project) => <ProjectCard project={project} i={step()} />)}
+      </ul>
+    </section>
+  ))}
+</BaseLayout>
+
+<style>
+  .lede { font-size: 1.1rem; margin: 0 0 1rem; }
+  section { margin-top: 3.5rem; }
+  h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+  .intro { margin: 0.4rem 0 1.25rem; font-size: 0.95rem; }
+  /* Two columns where there's room: the grid widens past the text column, like the videos do. */
+  .grid {
+    --w: max(100%, min(52rem, 100vw - 2.5rem));
+    width: var(--w);
+    margin: 0 0 0 calc((100% - var(--w)) / 2);
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem;
+  }
+</style>

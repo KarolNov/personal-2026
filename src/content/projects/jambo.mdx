@@ -1,0 +1,75 @@
+---
+title: jambo
+summary: A collaborative looper. Open a jam, share the link and stack loops together in real time, with people and AI agents in the same jam.
+kind: side
+order: 1
+when: "2026"
+status: Live
+stack: [React, Jotai, Y.js, duratom, Cloudflare Workers, Durable Objects, R2, MCP, Web Audio]
+cover: ../../assets/projects/jambo-home.jpg
+coverDark: ../../assets/projects/jambo-home-dark.jpg
+coverAlt: A jam in progress, with a 4×4 grid of pads lighting up as loops play, a 104 BPM display and a Record button.
+links:
+  - { label: Open a jam, href: 'https://jambo.karolnov.dev' }
+  - { label: About, href: 'https://jambo.karolnov.dev/about' }
+  - { label: Repo, href: 'https://github.com/KarolNov/jambo' }
+  - { label: duratom, href: 'https://github.com/KarolNov/duratom' }
+---
+
+import Figure from '../../components/Figure.astro';
+import Video from '../../components/Video.astro';
+import loops from '../../assets/projects/jambo-loops.jpg';
+import loopsDark from '../../assets/projects/jambo-loops-dark.jpg';
+import ai from '../../assets/projects/jambo-about.jpg';
+import aiDark from '../../assets/projects/jambo-about-dark.jpg';
+
+jambo is a 4×4 pad board you play together. Open a jam, send the link, and everyone in it hears and edits the same
+loops. There's no sign-up: the link is the key. It's built on
+[duratom](https://github.com/KarolNov/duratom), my library of durable, live Jotai atoms over a Yjs document.
+
+<Video
+  src="/media/projects/jambo-demo.mp4"
+  poster="/media/projects/jambo-demo.jpg"
+  dark={{ src: '/media/projects/jambo-demo-dark.mp4', poster: '/media/projects/jambo-demo-dark.jpg' }}
+  label="A jam with four loops playing. A few pads are played by hand, then Record counts in a bar, a clap and cowbell take is played, and it joins the jam as a fifth loop."
+  aspect="1120 / 1250"
+  loop
+>
+  Four loops from two AI agents are playing, and a new take joins them.
+</Video>
+
+## How it works
+
+- **One Cloudflare Worker.** Hono serves the API and the React app, and routes each jam's WebSocket to its own
+  Durable Object.
+- **One Durable Object per jam** relays Yjs updates between everyone in it and keeps a snapshot of the document in its
+  own SQLite storage.
+- **One write path.** Every change is a plain-data operation (`setTempo`, `assignPad`, `addTrack`, `setTrack`…),
+  validated with zod and applied in one transaction. The UI, the tests and AI agents all go through it.
+- **Loops are notes, not audio.** Tracks store pad hits in beats; each browser renders the synthesized kit into
+  buffers and a lookahead scheduler loops every track on its own bar grid. Recording counts in a bar and rounds the
+  take up to whole bars.
+- **Your own sounds** go to R2 per jam, kept inside a share of the free tier by a quota Durable Object and rate limits.
+
+## Built on duratom
+
+The client's state comes from [duratom](https://github.com/KarolNov/duratom), a small library of mine that's
+published on [npm](https://www.npmjs.com/package/duratom). It turns a node of a Yjs document into a Jotai atom:
+you read a value your schema has already checked, you write a patch that's validated before it's merged into the doc,
+and a component re-renders only when the value it shows changes, whoever changed it. Persistence and network sync
+stay with ordinary Yjs providers, so in jambo that's one `Y.Doc` and one Jotai store per jam, connected to the jam's
+Durable Object, with every pad and loop read through an atom.
+
+## Playing with an AI
+
+jambo has an MCP server, so Claude, ChatGPT, Gemini, Codex or any client that can add a remote MCP server can join a
+jam, read the board and add loops with the same operations your clicks make. Agents show up in "Who's here" next to
+people, and their loops carry their names.
+
+<Figure src={loops} dark={loopsDark} alt="Four loops, Bassline, Four on the floor, Hats and Plucks, each with a small AI mark. Three are violet and Plucks is amber.">
+  Each loop takes its author's colour: violet for Claude's drums and bass, amber for the plucks Codex added.
+</Figure>
+
+<Figure src={ai} dark={aiDark} href="https://jambo.karolnov.dev/about#ai" alt="jambo's Bring your AI section: the MCP server URL, tabs for Claude, Claude Code, ChatGPT, Gemini and Codex, and setup steps.">
+  Setting up an AI takes a server URL and a jam link.
+</Figure>

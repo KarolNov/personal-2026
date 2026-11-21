@@ -1,0 +1,37 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+// A screenshot as wide as the videos and playgrounds, with an optional caption in the slot.
+// With `dark`, the page shows whichever shot matches its theme.
+interface Props {
+  src: ImageMetadata;
+  alt: string;
+  /** The same screen in dark mode. */
+  dark?: ImageMetadata;
+  /** Where the shot links to instead of its full-size image, such as the live page it shows. */
+  href?: string;
+}
+const { src, alt, dark, href } = Astro.props;
+const shots = dark ? [{ image: src, theme: 'on-light' }, { image: dark, theme: 'on-dark' }] : [{ image: src, theme: undefined }];
+---
+
+<figure class="breakout">
+  {shots.map(({ image, theme }) => (
+    <a class={theme} href={href ?? image.src} aria-label={href ? alt : `${alt} (full size)`} {...(href?.startsWith('http') ? { rel: 'noopener' } : {})}>
+      <Image src={image} alt={alt} widths={[640, 960, 1600]} sizes="(min-width: 52rem) 50rem, 100vw" />
+    </a>
+  ))}
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  a { display: block; }
+  a :global(img) {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+  }
+</style>

@@ -1,0 +1,38 @@
+---
+title: AI assistant
+summary: An assistant across Ceros products with voice-to-voice, artifact-style output and a visual guide, back in 2024.
+kind: work
+order: 3
+role: Senior Staff Software Engineer
+when: "2024"
+status: Sunset
+stack: [React, Python, FastAPI, LangChain, Temporal, Pinecone]
+cover: ../../assets/projects/gemma.jpg
+coverAlt: The assistant's chat prompt, "Hey, I'm Gemma, how can I help?", surrounded by suggestions like Brainstorming ideas and Improve writing.
+---
+
+import Video from '../../components/Video.astro';
+
+In 2024 I helped build an AI assistant that worked across Ceros products. It was briefly released to the public, but
+never got the attention it deserved and was sunset after a change in leadership and strategy. I still think that with
+the right backing it could be where Lovable is now: it was turning a prompt into a finished, editable piece of content
+before that was common. What we learned building it carried into AI features across Ceros products, Flex among them.
+
+<Video
+  src="/media/projects/gemma-demo.mp4"
+  poster="/media/projects/gemma-demo.jpg"
+  label="The assistant generating an image from a chat request, turning it into a presentation after a type and style are picked, and taking a spoken reply."
+  aspect="16 / 9"
+  loop
+>
+  From a chat request to an image, then to a presentation: pick a type and a style, and it builds the deck you can talk
+  back to. From [Rhapsody's case study](https://www.rhapsodymedia.com/case-studies/gemma-ai) of the presentation templates.
+</Video>
+
+## What was in it
+
+- **Voice to voice**, before realtime speech APIs were common: you talked to it and it talked back.
+- **Artifact-style outputs.** Instead of answering only in chat, it produced things you could open and keep working on.
+- **A visual guide** that let vision models point at exact spots on an image, so it could show you where to click
+  instead of describing it.
+- **A Python backend** (FastAPI, LangChain, Temporal, Pinecone) behind a React client.

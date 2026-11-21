@@ -1,0 +1,112 @@
+---
+import { Image } from 'astro:assets';
+import { projectUrl, type Project } from '../lib/projects';
+
+interface Props {
+  project: Project;
+  /** Stagger index (--i) for the entrance. */
+  i?: number;
+}
+
+const { project, i } = Astro.props;
+const { title, summary, role, when, status, stack, cover, coverDark, coverAlt } = project.data;
+---
+
+<li class="rise" style={i !== undefined ? { '--i': i } : undefined}>
+  <a class="card" href={projectUrl(project)}>
+    {cover && (
+      <div class="cover">
+        <Image class:list={[{ 'on-light': coverDark }]} src={cover} alt={coverAlt ?? ''} widths={[480, 800, 1200]} sizes="(min-width: 48rem) 22rem, 100vw" />
+        {coverDark && <Image class="on-dark" src={coverDark} alt={coverAlt ?? ''} widths={[480, 800, 1200]} sizes="(min-width: 48rem) 22rem, 100vw" />}
+      </div>
+    )}
+    <div class="body">
+      <div class="head">
+        <h3>{title}</h3>
+        <span class:list={['status', status.toLowerCase().replace(' ', '-')]}>{status}</span>
+      </div>
+      <p class="meta muted">{role ? `${role} · ${when}` : when}</p>
+      <p class="summary">{summary}</p>
+      <ul class="tags" aria-label="Stack">
+        {stack.map((tool) => <li>{tool}</li>)}
+      </ul>
+    </div>
+  </a>
+</li>
+
+<style>
+  li.rise { list-style: none; }
+  .card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    color: var(--fg);
+    text-decoration: none;
+    overflow: hidden;
+    transition:
+      border-color 200ms var(--ease-out),
+      transform 200ms var(--ease-out),
+      box-shadow 200ms var(--ease-out);
+  }
+  .card:active { transform: scale(0.99); }
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px -16px color-mix(in srgb, var(--fg) 40%, transparent);
+    }
+    .card:hover h3 { color: var(--accent); }
+    /* Same weight as :hover, so the press has to come after it and keep the lift. */
+    .card:hover:active { transform: translateY(-2px) scale(0.99); }
+  }
+  .cover { aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .cover :global(img) { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left; border-radius: 0; }
+  .body { display: flex; flex-direction: column; flex: 1; padding: 1rem 1.1rem 1.1rem; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+  h3 { margin: 0; font-size: 1.05rem; transition: color 200ms var(--ease-out); }
+  .meta { margin: 0.15rem 0 0; font-size: 0.85rem; }
+  .summary { margin: 0.6rem 0 0; font-size: 0.95rem; flex: 1; }
+  .status {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .status::before {
+    content: '';
+    display: inline-block;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-right: 0.35rem;
+    border-radius: 999px;
+    background: currentColor;
+    vertical-align: 0.05em;
+  }
+  /* Anything still running uses the site's red; work in progress gets a hollow dot, and sunset stays muted. */
+  .status.live, .status.open-source, .status.in-progress { color: var(--accent); }
+  .status.in-progress::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  /* One row: whatever doesn't fit fades out at the edge; the full stack is on the project page. */
+  .tags {
+    list-style: none;
+    padding: 0;
+    margin: 0.9rem 0 0;
+    display: flex;
+    gap: 0.35rem;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+  }
+  .tags li {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0.05rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+</style>
