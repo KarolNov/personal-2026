@@ -7,12 +7,21 @@ role: Senior, then Lead Software Engineer
 when: 2020 – 2024
 status: Live
 stack: [React, Express, BullMQ, AWS SQS, DynamoDB, Chrome extension]
+cover: ../../assets/projects/markup.jpg
+coverAlt: MarkUp.io reviewing ceros.com, with a comment thread in the sidebar and a comment being written on the live page.
 links:
   - { label: markup.io, href: 'https://www.markup.io' }
 ---
 
+import Figure from '../../components/Figure.astro';
+import review from '../../assets/projects/markup.jpg';
+
 I joined MarkUp.io early and spent four years on it. The product lets you drop comments straight onto a live website,
 which meant learning the limits of the web the hard way.
+
+<Figure src={review} alt="MarkUp.io open on ceros.com: three comments in the sidebar, numbered pins on the page and a new comment being typed over a card.">
+  Reviewing a live site: comments pin to the element they're about, and the thread sits alongside.
+</Figure>
 
 ## What I did
 

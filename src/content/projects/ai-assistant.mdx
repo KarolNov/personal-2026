@@ -7,11 +7,26 @@ role: Senior Staff Software Engineer
 when: "2024"
 status: Sunset
 stack: [React, Python, FastAPI, LangChain, Temporal, Pinecone]
+cover: ../../assets/projects/gemma.jpg
+coverAlt: The assistant's chat prompt, "Hey, I'm Gemma, how can I help?", surrounded by suggestions like Brainstorming ideas and Improve writing.
 ---
+
+import Video from '../../components/Video.astro';
 
 In 2024 I built an AI assistant that worked across Ceros products. It never got a public name: the project was sunset
 after a change in leadership and strategy. What we learned building it carried into AI features across Ceros products,
 Flex among them.
+
+<Video
+  src="/media/projects/gemma-demo.mp4"
+  poster="/media/projects/gemma-demo.jpg"
+  label="The assistant generating an image from a chat request, turning it into a presentation after a type and style are picked, and taking a spoken reply."
+  aspect="16 / 9"
+  loop
+>
+  From a chat request to an image, then to a presentation: pick a type and a style, and it builds the deck you can talk
+  back to. From [Rhapsody's case study](https://www.rhapsodymedia.com/case-studies/gemma-ai) of the presentation templates.
+</Video>
 
 ## What was in it
 
