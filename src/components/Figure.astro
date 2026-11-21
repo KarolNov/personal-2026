@@ -9,14 +9,16 @@ interface Props {
   alt: string;
   /** The same screen in dark mode. */
   dark?: ImageMetadata;
+  /** Where the shot links to instead of its full-size image, such as the live page it shows. */
+  href?: string;
 }
-const { src, alt, dark } = Astro.props;
+const { src, alt, dark, href } = Astro.props;
 const shots = dark ? [{ image: src, theme: 'on-light' }, { image: dark, theme: 'on-dark' }] : [{ image: src, theme: undefined }];
 ---
 
 <figure class="figure">
   {shots.map(({ image, theme }) => (
-    <a class={theme} href={image.src} aria-label={`${alt} (full size)`}>
+    <a class={theme} href={href ?? image.src} aria-label={href ? alt : `${alt} (full size)`} {...(href?.startsWith('http') ? { rel: 'noopener' } : {})}>
       <Image src={image} alt={alt} widths={[640, 960, 1600]} sizes="(min-width: 52rem) 50rem, 100vw" />
     </a>
   ))}
