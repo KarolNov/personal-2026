@@ -61,7 +61,7 @@
         // corner of a tall screen crawl.
         root.animate(
           { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(142% at ${x}px ${y}px)`] },
-          { duration: 750, easing: 'cubic-bezier(0.5, 1, 0.89, 1)', pseudoElement: '::view-transition-new(root)' },
+          { duration: 550, easing: 'cubic-bezier(0.5, 1, 0.89, 1)', pseudoElement: '::view-transition-new(root)' },
         );
       });
       // A rapid second click skips this transition; leave the class for the newer one.
@@ -82,10 +82,17 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   .theme-toggle:hover { color: var(--fg); }
+  .theme-toggle:active { transform: scale(0.95); }
+  /* Both icons share one cell; the swap blurs one into the other rather than snapping. */
   .icon {
-    display: none;
+    grid-area: 1 / 1;
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(2px);
+    transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out), filter 150ms var(--ease-out);
     width: 1.15rem;
     height: 1.15rem;
     fill: none;
@@ -96,10 +103,14 @@
   }
   .icon.dark { fill: currentColor; stroke: none; }
   /* Before the script runs, show the theme on screen straight from CSS. */
-  @media (prefers-color-scheme: light) { :global(:root:not([data-theme])) .theme-toggle:not([data-state]) .light { display: block; } }
-  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme])) .theme-toggle:not([data-state]) .dark { display: block; } }
+  @media (prefers-color-scheme: light) { :global(:root:not([data-theme])) .theme-toggle:not([data-state]) .light { opacity: 1; transform: none; filter: none; } }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme])) .theme-toggle:not([data-state]) .dark { opacity: 1; transform: none; filter: none; } }
   :global(:root[data-theme='light']) .theme-toggle:not([data-state]) .light,
   :global(:root[data-theme='dark']) .theme-toggle:not([data-state]) .dark,
   .theme-toggle[data-state='light'] .light,
-  .theme-toggle[data-state='dark'] .dark { display: block; }
+  .theme-toggle[data-state='dark'] .dark { opacity: 1; transform: none; filter: none; }
+  /* Less motion: the icons still crossfade, without the scale and blur. */
+  @media (prefers-reduced-motion: reduce) {
+    .icon { transform: none; filter: none; }
+  }
 </style>

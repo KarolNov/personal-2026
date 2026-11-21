@@ -49,8 +49,20 @@ const takes = dark ? [{ src, poster, theme: 'on-light' }, { ...dark, theme: 'on-
       (entries) => {
         for (const { target, isIntersecting } of entries) {
           const video = target as HTMLVideoElement;
-          if (isIntersecting) video.play().catch(() => {});
-          else video.pause();
+          const figure = video.closest<HTMLElement>('.video');
+          if (isIntersecting) {
+            // Picking up where the other theme's take left off, so a theme switch doesn't restart the loop.
+            const handoff = figure?.dataset.handoff;
+            if (handoff) {
+              video.currentTime = Number(handoff);
+              delete figure.dataset.handoff;
+            }
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+            // Hidden by a theme switch rather than scrolled away: leave its position for the other take.
+            if (figure && !video.checkVisibility()) figure.dataset.handoff = String(video.currentTime);
+          }
         }
       },
       { threshold: 0.4 },
