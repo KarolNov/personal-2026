@@ -27,8 +27,7 @@ const { title, summary, role, when, status, stack, cover, coverAlt } = project.d
       <p class="meta muted">{role ? `${role} · ${when}` : when}</p>
       <p class="summary">{summary}</p>
       <ul class="tags" aria-label="Stack">
-        {stack.slice(0, 4).map((tool) => <li>{tool}</li>)}
-        {stack.length > 4 && <li class="more">+{stack.length - 4}</li>}
+        {stack.map((tool) => <li>{tool}</li>)}
       </ul>
     </div>
   </a>
@@ -88,8 +87,19 @@ const { title, summary, role, when, status, stack, cover, coverAlt } = project.d
   /* Anything still running uses the site's red; work in progress gets a hollow dot, and sunset stays muted. */
   .status.live, .status.open-source, .status.in-progress { color: var(--accent); }
   .status.in-progress::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
-  .tags { list-style: none; padding: 0; margin: 0.9rem 0 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  /* One row: whatever doesn't fit fades out at the edge; the full stack is on the project page. */
+  .tags {
+    list-style: none;
+    padding: 0;
+    margin: 0.9rem 0 0;
+    display: flex;
+    gap: 0.35rem;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+  }
   .tags li {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 0.05rem 0.5rem;
     border: 1px solid var(--border);
     border-radius: 999px;
