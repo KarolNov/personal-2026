@@ -1,6 +1,6 @@
 ---
 title: blueprint
-summary: A Claude Code plugin for larger changes. It grills your solution, writes it up as a spec change in your notes tool, builds it and keeps specs and code honest.
+summary: A Claude Code plugin for larger changes. It grills your solution, writes it up as a spec change in your notes tool, builds it and keeps specs and code in sync.
 kind: side
 order: 3
 when: "2026"
@@ -26,8 +26,7 @@ import mapDark from '../../assets/projects/blueprint-map-dark.jpg';
 blueprint is how I work on larger, architected changes with agents. It sits between
 [wayfinder](https://github.com/mattpocock/skills) and [OpenSpec](https://github.com/Fission-AI/OpenSpec): you bring
 the solution, and it grills *that* solution in a few short rounds instead of hunting for alternatives. Then it writes
-the change up where your team already keeps docs, builds it task by task, and keeps the specs and the code honest in
-both directions. It lives in my [skills repo](https://github.com/KarolNov/skills) with the other Claude Code skills I
+the change up where your team already keeps docs, builds it task by task, and keeps the specs and the code in sync. It lives in my [skills repo](https://github.com/KarolNov/skills) with the other Claude Code skills I
 use daily.
 
 <Video
@@ -37,8 +36,7 @@ use daily.
   label="A narrated walkthrough of blueprint: a review with a comment in the Claude Code pane, the same review in Notion, a change's PR groups started from the pane, jambo's capability map, and a drift comment on a pull request."
   aspect="1440 / 900"
 >
-  A review in Claude Code and in Notion, PR groups started from the pane, jambo's capability map, and the drift
-  check on a pull request. 72 seconds.
+  A showcase of the blueprint skill in Claude Code and Notion, from a review to the drift check on a pull request.
 </Video>
 
 ## How it works
@@ -80,11 +78,11 @@ files and the docs outside the repo that describe it. Search covers all of it.
   jambo's capability map, with `looper` selected.
 </Figure>
 
-## Reviews people actually read
+## Reviews
 
-Every review opens with a before → after diagram with the change coloured in. For behaviour over time, like retries,
-offline or ordering, it offers a **playground**: a small interactive model with scenario buttons, knobs and a switch
-that runs the same scenario through the old and the new design.
+Every review opens with a before → after diagram with the change coloured in. When a change is about how something
+behaves over time, the review can also include a **playground**: a small interactive model that runs the same scenario
+through the old and the new design.
 
 Specs and blueprints can live in Notion (the default), Obsidian, Linear, Jira and Confluence, GitHub or a Markdown
 folder, with tickets wherever the team keeps them. The only thing in the repo is a small `.blueprint/` folder that
