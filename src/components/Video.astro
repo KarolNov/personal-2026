@@ -1,24 +1,57 @@
 ---
-// A video with its own captions track, as wide as the playgrounds. Captions start on, since most people
-// scroll past with the sound off, and the player's menu turns them off.
+// A video as wide as the playgrounds. Narrated videos carry their own captions track, on by default, since
+// most people scroll past with the sound off, and the player's menu turns them off. A silent `loop` clip
+// (a screen recording standing in for a GIF) plays muted on its own, unless the reader prefers less motion.
 
 interface Props {
   src: string;
   poster: string;
-  captions: string;
+  /** WebVTT captions, for videos with narration. */
+  captions?: string;
   /** What the video shows, for screen readers. */
   label: string;
+  /** Silent, muted and looping, like a GIF. */
+  loop?: boolean;
+  /** Width / height of the recording; defaults to the walkthroughs' 1280 × 800. */
+  aspect?: string;
 }
-const { src, poster, captions, label } = Astro.props;
+const { src, poster, captions, label, loop = false, aspect = '1280 / 800' } = Astro.props;
 ---
 
 <figure class="video">
-  <video controls playsinline preload="metadata" poster={poster} aria-label={label}>
+  <video
+    controls
+    playsinline
+    preload="metadata"
+    poster={poster}
+    aria-label={label}
+    style={{ aspectRatio: aspect }}
+    loop={loop}
+    muted={loop}
+    data-autoplay={loop ? '' : undefined}
+  >
     <source src={src} type="video/mp4" />
-    <track kind="captions" srclang="en" label="English" src={captions} default />
+    {captions && <track kind="captions" srclang="en" label="English" src={captions} default />}
   </video>
   <figcaption><slot /></figcaption>
 </figure>
+
+<script>
+  // Loops start when they scroll into view and pause when they leave, but never for reduced motion.
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const { target, isIntersecting } of entries) {
+          const video = target as HTMLVideoElement;
+          if (isIntersecting) video.play().catch(() => {});
+          else video.pause();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    document.querySelectorAll<HTMLVideoElement>('video[data-autoplay]').forEach((video) => io.observe(video));
+  }
+</script>
 
 <style>
   .video {
@@ -30,7 +63,6 @@ const { src, poster, captions, label } = Astro.props;
   video {
     display: block;
     width: 100%;
-    aspect-ratio: 1280 / 800;
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) + 4px);
     background: var(--surface);

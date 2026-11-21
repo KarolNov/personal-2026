@@ -27,9 +27,9 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     view-transition-name: site-header;
   }
   .brand { font-weight: 700; color: var(--fg); text-decoration: none; }
-  nav { display: flex; gap: 1.25rem; align-items: center; }
-  /* On the narrowest phones the full gaps push the theme toggle past the edge. */
-  @media (max-width: 22.5rem) { nav { gap: 0.75rem; } }
+  nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; align-items: center; }
+  /* On phones the full gaps push the theme toggle past the edge; on the very narrowest it wraps. */
+  @media (max-width: 26rem) { nav { column-gap: 0.45rem; font-size: 0.95rem; } }
   nav a { color: var(--muted); text-decoration: none; }
   nav a:hover, nav a[aria-current='page'] { color: var(--fg); }
 </style>
