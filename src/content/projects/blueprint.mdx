@@ -4,17 +4,12 @@ summary: A Claude Code plugin for larger changes. It grills your solution, write
 kind: side
 order: 3
 when: "2026"
-status: Open source
+status: In progress
 stack: [Claude Code, Agent skills, MCP, Notion, Mermaid, Python]
-cover: ../../assets/projects/blueprint-playground.jpg
-coverAlt: A blueprint playground comparing y-websocket with the new design, showing two browser tabs, a sync server and a phone with their documents in sync.
 links:
   - { label: Repo, href: 'https://github.com/KarolNov/skills#blueprint' }
-  - { label: Example in Notion, href: 'https://app.notion.com/p/karolnov/Blueprint-example-fictional-yjs-provider-41343cce21f281668919f46ad2891139' }
+  - { label: jambo repo, href: 'https://github.com/KarolNov/jambo' }
 ---
-
-import Figure from '../../components/Figure.astro';
-import playground from '../../assets/projects/blueprint-playground.jpg';
 
 blueprint is how I work on larger, architected changes with agents. It sits between
 [wayfinder](https://github.com/mattpocock/skills) and [OpenSpec](https://github.com/Fission-AI/OpenSpec): you bring
@@ -40,11 +35,12 @@ Every review opens with a before → after diagram with the change coloured in. 
 offline or ordering, it offers a **playground**: a small interactive model with scenario buttons, knobs and a switch
 that runs the same scenario through the old and the new design.
 
-<Figure src={playground} alt="A playground with scenario buttons (Edit a card, Cursors on a lossy link, Phone offline, WebTransport blocked) above two tabs, a sync server and a phone.">
-  The playground from the example blueprint, adding WebTransport sync to a fictional Yjs provider.
-</Figure>
-
 Specs and blueprints can live in Notion (the default), Obsidian, Linear, Jira and Confluence, GitHub or a Markdown
 folder, with tickets wherever the team keeps them. The only thing in the repo is a small `.blueprint/` folder that
-maps capabilities to code and lets `drift.py` tell from git alone which specs need another look. The skills repo
-runs blueprint on itself, and so does jambo.
+maps capabilities to code and lets `drift.py` tell from git alone which specs need another look.
+
+## See it in use
+
+The [skills repo](https://github.com/KarolNov/skills) runs blueprint on itself: its `.blueprint/` folder, the drift
+check on every pull request, and the specs and blueprints it writes. [jambo](https://github.com/KarolNov/jambo) runs it
+too, on a real app with sync, audio and AI agents.
