@@ -1,24 +1,25 @@
 ---
-// Where this post sits in the sync engine series. Parts that aren't written yet are listed
+// Where this post sits in its series (the sync engine one unless told otherwise). Parts that aren't written yet are listed
 // without a link.
 import { getPosts } from '../lib/posts';
 import { SYNC_SERIES } from '../lib/series';
 
 interface Props {
   current: string;
+  series?: typeof SYNC_SERIES;
 }
 
-const { current } = Astro.props;
+const { current, series = SYNC_SERIES } = Astro.props;
 const published = new Set((await getPosts()).map((p) => p.id));
-const index = SYNC_SERIES.parts.findIndex((p) => p.slug === current);
+const index = series.parts.findIndex((p) => p.slug === current);
 ---
 
-<nav class="series" aria-label={`${SYNC_SERIES.name} series`}>
+<nav class="series" aria-label={`${series.name} series`}>
   <p class="label">
-    {SYNC_SERIES.name} · part {index + 1} of {SYNC_SERIES.parts.length}
+    {series.name} · part {index + 1} of {series.parts.length}
   </p>
   <ol>
-    {SYNC_SERIES.parts.map((part, i) => (
+    {series.parts.map((part, i) => (
       <li>
         {part.slug === current ? (
           <span class="row current" aria-current="page">

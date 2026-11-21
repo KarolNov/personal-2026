@@ -10,3 +10,12 @@ export const SYNC_SERIES = {
     { slug: 'restoring-versions-while-collaborating', title: 'Restoring versions while others keep editing' },
   ],
 };
+
+/** Working with AI, in reading order. */
+export const AI_SERIES = {
+  name: 'Working with AI',
+  parts: [
+    { slug: 'show-dont-prompt', title: "Show, don't prompt" },
+    { slug: 'give-the-ai-something-to-lean-on', title: 'Give the AI something to lean on' },
+  ],
+};

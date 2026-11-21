@@ -1,0 +1,266 @@
+---
+// A model of one frame in a collaborative editor as the load climbs, run twice: once with everything treated as
+// equally important, once with a written-down list of what's required and what can be paused. The numbers are a
+// toy model, not measurements: each task costs a fixed amount plus a bit more per unit of load.
+// The page renders the starting state, so it reads fine without JavaScript; the script only makes the slider
+// and the toggle live.
+
+interface Task {
+  id: string;
+  name: string;
+  /** Milliseconds per frame at no load, and how much each step of load adds. */
+  base: number;
+  perLoad: number;
+  kind: 'required' | 'optional';
+  /** What the harness does to it under pressure. Optional tasks are shed in the order they're listed. */
+  shed?: 'pause' | 'degrade';
+  /** Shown next to a paused or degraded task. */
+  note?: string;
+}
+
+const tasks: Task[] = [
+  { id: 'input', name: 'Handle typing and selection', base: 1, perLoad: 0.15, kind: 'required' },
+  { id: 'render', name: 'Lay out and draw the canvas', base: 3, perLoad: 0.6, kind: 'required' },
+  { id: 'sync', name: 'Send and apply edits', base: 0.5, perLoad: 0.25, kind: 'required' },
+  { id: 'analytics', name: 'Analytics events', base: 0.5, perLoad: 0.2, kind: 'optional', shed: 'pause', note: 'queued, sent later' },
+  { id: 'prefetch', name: 'Prefetch linked assets', base: 1, perLoad: 0.3, kind: 'optional', shed: 'pause', note: 'paused' },
+  { id: 'thumbs', name: 'Regenerate page thumbnails', base: 1.5, perLoad: 0.45, kind: 'optional', shed: 'pause', note: 'paused' },
+  { id: 'cursors', name: 'Other people’s cursors', base: 0.8, perLoad: 0.5, kind: 'optional', shed: 'degrade', note: 'updates 4× less often' },
+];
+
+const BUDGET = 16.7;
+const START_LOAD = 7;
+---
+
+<figure class="sim" data-sim data-tasks={JSON.stringify(tasks)} data-budget={BUDGET}>
+  <div class="bar">
+    <div class="picks" role="group" aria-label="How the editor decides what to run">
+      <button type="button" data-mode="all" aria-pressed="true">Everything matters</button>
+      <button type="button" data-mode="harness" aria-pressed="false">Required vs optional</button>
+    </div>
+    <label class="load">
+      <span>Load</span>
+      <input type="range" min="0" max="10" step="1" value={START_LOAD} data-load aria-describedby="sim-load-hint" />
+      <output data-load-out>{START_LOAD}</output>
+    </label>
+  </div>
+  <p class="hint" id="sim-load-hint">Load is how busy the document is: more people, more pages, more changes per second.</p>
+
+  <div class="frame" aria-hidden="true">
+    <div class="track" data-track>
+      {tasks.map((t) => <span class:list={['seg', t.kind]} data-seg={t.id} />)}
+      <span class="budget" style={`--at: ${(BUDGET / 34) * 100}%`}><span>16.7 ms</span></span>
+    </div>
+  </div>
+
+  <dl class="stats" aria-live="polite">
+    <div><dt>One frame takes</dt><dd data-frame>–</dd></div>
+    <div><dt>Frames per second</dt><dd data-fps>–</dd></div>
+    <div><dt>Typing feels</dt><dd data-feel>–</dd></div>
+  </dl>
+
+  <ul class="tasks">
+    {tasks.map((t) => (
+      <li class:list={[t.kind]} data-task={t.id}>
+        <span class="swatch" aria-hidden="true" />
+        <span class="name">{t.name}</span>
+        <span class="tag">{t.kind}</span>
+        <span class="state" data-state />
+      </li>
+    ))}
+  </ul>
+
+  <figcaption><slot /></figcaption>
+</figure>
+
+<script>
+  interface Task {
+    id: string;
+    name: string;
+    base: number;
+    perLoad: number;
+    kind: 'required' | 'optional';
+    shed?: 'pause' | 'degrade';
+    note?: string;
+  }
+  /** The widest frame the bar draws, so the budget line sits still while the bars grow. */
+  const SCALE = 34;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-sim]')) {
+    const tasks: Task[] = JSON.parse(root.dataset.tasks!);
+    const budget = Number(root.dataset.budget);
+    const slider = root.querySelector<HTMLInputElement>('[data-load]')!;
+    const loadOut = root.querySelector<HTMLOutputElement>('[data-load-out]')!;
+    const modes = [...root.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+    let mode = 'all';
+
+    function update() {
+      const load = Number(slider.value);
+      loadOut.value = String(load);
+      const cost = new Map(tasks.map((t) => [t.id, t.base + t.perLoad * load]));
+      const state = new Map<string, 'running' | 'paused' | 'degraded'>(tasks.map((t) => [t.id, 'running']));
+
+      // The harness never touches required work. It sheds optional work in the listed order, one task at a time,
+      // until the frame fits the budget again.
+      const total = () => tasks.reduce((sum, t) => sum + cost.get(t.id)!, 0);
+      if (mode === 'harness') {
+        for (const t of tasks) {
+          if (t.kind === 'required' || total() <= budget) continue;
+          if (t.shed === 'degrade') {
+            cost.set(t.id, cost.get(t.id)! / 4);
+            state.set(t.id, 'degraded');
+          } else {
+            cost.set(t.id, 0);
+            state.set(t.id, 'paused');
+          }
+        }
+      }
+
+      const frame = total();
+      const fps = Math.min(60, 1000 / frame);
+      for (const t of tasks) {
+        const seg = root.querySelector<HTMLElement>(`[data-seg="${t.id}"]`)!;
+        seg.style.width = `${(Math.min(cost.get(t.id)!, SCALE) / SCALE) * 100}%`;
+        const row = root.querySelector<HTMLElement>(`[data-task="${t.id}"]`)!;
+        const s = state.get(t.id)!;
+        row.dataset.status = s;
+        row.querySelector<HTMLElement>('[data-state]')!.textContent =
+          s === 'running' ? `${cost.get(t.id)!.toFixed(1)} ms` : t.note ?? s;
+      }
+      root.querySelector<HTMLElement>('[data-track]')!.classList.toggle('over', frame > budget);
+      root.querySelector('[data-frame]')!.textContent = `${frame.toFixed(1)} ms`;
+      root.querySelector('[data-fps]')!.textContent = fps.toFixed(0);
+      const feel = root.querySelector<HTMLElement>('[data-feel]')!;
+      feel.textContent = frame <= budget ? 'instant' : frame <= 25 ? 'a bit sticky' : 'laggy';
+      feel.dataset.feel = frame <= budget ? 'good' : frame <= 25 ? 'meh' : 'bad';
+    }
+
+    for (const b of modes) {
+      b.addEventListener('click', () => {
+        mode = b.dataset.mode!;
+        for (const other of modes) other.setAttribute('aria-pressed', String(other === b));
+        update();
+      });
+    }
+    slider.addEventListener('input', update);
+    update();
+  }
+</script>
+
+<style>
+  .sim {
+    --required: light-dark(#0f7b6c, #4fc7b4);
+    --optional: light-dark(#b4561f, #f0a06a);
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding: 0.8rem 1rem 0.4rem;
+  }
+  .picks { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 999px; }
+  .picks button {
+    padding: 0.35rem 0.8rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out);
+  }
+  .picks button[aria-pressed='true'] { background: var(--accent-bg); color: var(--accent-fg); }
+  .picks button:active { transform: scale(0.97); }
+
+  .load { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--muted); }
+  .load input { width: 9rem; accent-color: var(--accent); }
+  .load output { min-width: 1.5ch; color: var(--fg); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .hint { margin: 0; padding: 0 1rem 0.6rem; color: var(--muted); font-size: 0.82rem; }
+
+  .frame { padding: 1.6rem 1rem 0.75rem; }
+  .track {
+    position: relative;
+    display: flex;
+    height: 1.75rem;
+    border-radius: 6px;
+    background: var(--code-bg);
+  }
+  .seg {
+    height: 100%;
+    transition: width 220ms var(--ease-out);
+    box-shadow: inset -1px 0 0 var(--surface);
+  }
+  .seg.required { background: var(--required); }
+  .seg.optional { background: var(--optional); }
+  .seg:first-child { border-radius: 6px 0 0 6px; }
+  .budget {
+    position: absolute;
+    top: -0.45rem;
+    bottom: -0.45rem;
+    left: var(--at);
+    border-left: 2px dashed var(--fg);
+  }
+  .budget span {
+    position: absolute;
+    bottom: 100%;
+    left: 0.3rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.5rem 1rem 0.9rem;
+  }
+  .stats dt { color: var(--muted); font-size: 0.78rem; }
+  .stats dd { margin: 0; font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  [data-feel='good'] { color: var(--success); }
+  [data-feel='meh'] { color: var(--optional); }
+  [data-feel='bad'] { color: var(--danger); }
+
+  .tasks { margin: 0; padding: 0.4rem 1rem 0.8rem; border-top: 1px solid var(--border); list-style: none; }
+  .tasks li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'sw name state' 'sw tag state';
+    align-items: center;
+    column-gap: 0.6rem;
+    padding: 0.4rem 0;
+    transition: opacity 200ms var(--ease-out);
+  }
+  @media (min-width: 34rem) {
+    .tasks li { grid-template-columns: auto 1fr 5.5rem 11rem; grid-template-areas: 'sw name tag state'; }
+  }
+  .swatch { grid-area: sw; width: 0.7rem; height: 0.7rem; border-radius: 3px; }
+  .required .swatch { background: var(--required); }
+  .optional .swatch { background: var(--optional); }
+  .name { grid-area: name; }
+  .tag { grid-area: tag; color: var(--muted); font-size: 0.78rem; }
+  .state { grid-area: state; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+  li[data-status='paused'] { opacity: 0.5; }
+  li[data-status='paused'] .name { text-decoration: line-through; }
+  li[data-status='degraded'] .state, li[data-status='paused'] .state { color: var(--optional); }
+
+  figcaption { padding: 0.7rem 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  figcaption:empty { display: none; }
+  figcaption :global(p) { margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seg, .picks button, .tasks li { transition: none; }
+  }
+</style>
