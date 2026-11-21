@@ -11,8 +11,12 @@ coverDark: ../../assets/projects/blueprint-map-dark.jpg
 coverAlt: jambo's capability map, with looper selected, its shared-file lines to jams, sounds and board drawn forward, and its requirements listed in the side panel.
 links:
   - { label: Repo, href: 'https://github.com/KarolNov/skills#blueprint' }
+  - { label: Specs in Notion, href: 'https://app.notion.com/p/karolnov/Specs-blueprints-41c43cce21f2819ba9e9e27bc322d312' }
   - { label: jambo repo, href: 'https://github.com/KarolNov/jambo' }
+  - { label: jambo specs, href: 'https://app.notion.com/p/karolnov/Specs-blueprints-41b43cce21f281a8aedffc816ffb7b69' }
 ---
+
+import Video from '../../components/Video.astro';
 
 blueprint is how I work on larger, architected changes with agents. It sits between
 [wayfinder](https://github.com/mattpocock/skills) and [OpenSpec](https://github.com/Fission-AI/OpenSpec): you bring
@@ -20,6 +24,17 @@ the solution, and it grills *that* solution in a few short rounds instead of hun
 the change up where your team already keeps docs, builds it task by task, and keeps the specs and the code honest in
 both directions. It lives in my [skills repo](https://github.com/KarolNov/skills) with the other Claude Code skills I
 use daily.
+
+<Video
+  src="/media/projects/blueprint-demo.mp4"
+  poster="/media/projects/blueprint-demo.jpg"
+  captions="/media/projects/blueprint-demo.vtt"
+  label="A narrated walkthrough of blueprint: a review with a comment in the Claude Code pane, the same review in Notion, a change's PR groups started from the pane, jambo's capability map, and a drift comment on a pull request."
+  aspect="1440 / 900"
+>
+  A review in Claude Code and in Notion, PR groups started from the pane, jambo's capability map, and the drift
+  check on a pull request. 72 seconds.
+</Video>
 
 ## How it works
 
@@ -45,5 +60,7 @@ maps capabilities to code and lets `drift.py` tell from git alone which specs ne
 ## See it in use
 
 The [skills repo](https://github.com/KarolNov/skills) runs blueprint on itself: its `.blueprint/` folder, the drift
-check on every pull request, and the specs and blueprints it writes. [jambo](https://github.com/KarolNov/jambo) runs it
-too, on a real app with sync, audio and AI agents.
+check on every pull request, and the [specs and blueprints](https://app.notion.com/p/karolnov/Specs-blueprints-41c43cce21f2819ba9e9e27bc322d312)
+it writes. [jambo](https://github.com/KarolNov/jambo) runs it too, on a real app with sync, audio and AI agents, with
+its own [specs and blueprints](https://app.notion.com/p/karolnov/Specs-blueprints-41b43cce21f281a8aedffc816ffb7b69).
+Both Notion workspaces are public and read-only.
