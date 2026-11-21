@@ -16,7 +16,12 @@ links:
   - { label: jambo specs, href: 'https://app.notion.com/p/karolnov/Specs-blueprints-41b43cce21f281a8aedffc816ffb7b69' }
 ---
 
+import Figure from '../../components/Figure.astro';
 import Video from '../../components/Video.astro';
+import paneReview from '../../assets/projects/blueprint-pane-review.jpg';
+import panePrs from '../../assets/projects/blueprint-pane-prs.jpg';
+import map from '../../assets/projects/blueprint-map.jpg';
+import mapDark from '../../assets/projects/blueprint-map-dark.jpg';
 
 blueprint is how I work on larger, architected changes with agents. It sits between
 [wayfinder](https://github.com/mattpocock/skills) and [OpenSpec](https://github.com/Fission-AI/OpenSpec): you bring
@@ -46,6 +51,34 @@ use daily.
   the capability specs.
 - **`/blueprint-drift`** and **`/blueprint-sync`** catch the two ways specs and code drift apart: the code strayed from
   the spec, or the spec fell behind the code.
+
+## Views
+
+Most of blueprint runs in chat, but a few things are easier to look at than to read about.
+
+**A pane in Claude Code** (`/blueprint-ui`), in the desktop app and the terminal. It opens on a board: which
+capabilities need a drift check or a sync and which changes are open, each with a ▶ button for the next step.
+Reviews, briefs and specs open in the same pane, read from wherever they live. Comment on a line or suggest a change,
+and the batch goes back to `/blueprint` to fold into the next revision.
+
+<Figure src={paneReview} alt="A blueprint review in the Claude Code pane, with a comment being written under its What changes section, and Comment and Suggest change tabs.">
+  A review in the pane, with a comment on its What changes section.
+</Figure>
+
+**The PR plan.** When `/blueprint apply` splits a change into pull requests, the pane draws them as a tree: stacked
+on each other or cut from main, specs last. Once you approve it, ▶ starts each group in its own session.
+
+<Figure src={panePrs} alt="The pane in a terminal, showing a change's PR groups as a tree under main: drift.py artifacts and Docs ready to start, two groups waiting for group 1's PR, and Specs after every group merges.">
+  The PR plan for a change, with two groups ready to start.
+</Figure>
+
+**The capability map** (`/blueprint map`) isn't part of the pane: it's one local HTML page, drawn from the repo
+alone. Capabilities sharing files are tied together, drifted ones are red, and clicking one lists its requirements,
+files and the docs outside the repo that describe it. Search covers all of it.
+
+<Figure src={map} dark={mapDark} alt="jambo's capability map, with looper selected, its shared-file lines to jams, sounds and board drawn forward, and its requirements listed in the side panel.">
+  jambo's capability map, with `looper` selected.
+</Figure>
 
 ## Reviews people actually read
 
