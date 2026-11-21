@@ -30,6 +30,13 @@
 :root[data-theme='light'] { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }
 
+/* Media shot in both themes: .on-light and .on-dark hide outside their theme, following the same
+   OS preference and toggle as the tokens. Hidden images aren't fetched, since they load lazily. */
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .on-dark { display: none !important; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .on-light { display: none !important; } }
+:root[data-theme='light'] .on-dark,
+:root[data-theme='dark'] .on-light { display: none !important; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }

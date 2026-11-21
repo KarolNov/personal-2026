@@ -35,6 +35,8 @@ const projects = defineCollection({
       stack: z.array(z.string()).default([]),
       links: z.array(z.object({ label: z.string(), href: z.string() })).default([]),
       cover: image().optional(),
+      /** The cover shot in dark mode, shown when the site is dark. */
+      coverDark: image().optional(),
       coverAlt: z.string().optional(),
       draft: z.boolean().default(false),
     }),

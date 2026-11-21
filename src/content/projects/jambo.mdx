@@ -7,7 +7,8 @@ when: "2026"
 status: Live
 stack: [React, Jotai, Y.js, duratom, Cloudflare Workers, Durable Objects, R2, MCP, Web Audio]
 cover: ../../assets/projects/jambo-home.jpg
-coverAlt: The jambo board, a 4×4 grid of pads named Kick, Snare, Clap and so on, next to a 100 BPM display and a Record button.
+coverDark: ../../assets/projects/jambo-home-dark.jpg
+coverAlt: A jam in progress, with a 4×4 grid of pads lighting up as loops play, a 104 BPM display and a Record button.
 links:
   - { label: Open a jam, href: 'https://jambo.karolnov.dev' }
   - { label: Add your AI, href: 'https://jambo.karolnov.dev/about#ai' }
@@ -15,16 +16,27 @@ links:
 ---
 
 import Figure from '../../components/Figure.astro';
-import board from '../../assets/projects/jambo-home.jpg';
+import Video from '../../components/Video.astro';
+import loops from '../../assets/projects/jambo-loops.jpg';
+import loopsDark from '../../assets/projects/jambo-loops-dark.jpg';
 import ai from '../../assets/projects/jambo-about.jpg';
+import aiDark from '../../assets/projects/jambo-about-dark.jpg';
 
 jambo is a 4×4 pad board you play together. Open a jam, send the link, and everyone in it hears and edits the same
 loops. There's no sign-up: the link is the key. It's built on
 [duratom](https://github.com/KarolNov/duratom), my library of durable, live Jotai atoms over a Yjs document.
 
-<Figure src={board} alt="An empty jam: sixteen pads on the left, tempo, Record and Change sounds on the right.">
-  A new jam. Play pads by clicking or with 1234 / QWER / ASDF / ZXCV; Space records a loop for everyone.
-</Figure>
+<Video
+  src="/media/projects/jambo-demo.mp4"
+  poster="/media/projects/jambo-demo.jpg"
+  dark={{ src: '/media/projects/jambo-demo-dark.mp4', poster: '/media/projects/jambo-demo-dark.jpg' }}
+  label="A jam with four loops playing. A few pads are played by hand, then Record counts in a bar, a clap and cowbell take is played, and it joins the jam as a fifth loop."
+  aspect="1120 / 1250"
+  loop
+>
+  Four loops from two AI agents are playing. Pads go by click or keyboard (1234 / QWER / ASDF / ZXCV), and Space
+  records a take that joins the jam for everyone in it.
+</Video>
 
 ## How it works
 
@@ -54,6 +66,10 @@ jambo has an MCP server, so Claude, ChatGPT, Gemini, Codex or any client that ca
 jam, read the board and add loops with the same operations your clicks make. Agents show up in "Who's here" next to
 people, and their loops carry their names.
 
-<Figure src={ai} alt="jambo's Bring your AI page: the MCP server URL, tabs for Claude, Claude Code, ChatGPT, Gemini and Codex, and example prompts.">
+<Figure src={loops} dark={loopsDark} alt="Four loops, Bassline, Four on the floor, Hats and Plucks, each with a small AI mark. Three are violet and Plucks is amber.">
+  Each loop takes its author's colour: violet for Claude's drums and bass, amber for the plucks Codex added.
+</Figure>
+
+<Figure src={ai} dark={aiDark} alt="jambo's Bring your AI section: the MCP server URL, tabs for Claude, Claude Code, ChatGPT, Gemini and Codex, and setup steps.">
   Setting up an AI takes a server URL and a jam link.
 </Figure>

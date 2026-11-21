@@ -14,25 +14,31 @@ interface Props {
   loop?: boolean;
   /** Width / height of the recording; defaults to the walkthroughs' 1280 × 800. */
   aspect?: string;
+  /** The same recording in dark mode, shown instead when the site is dark. */
+  dark?: { src: string; poster: string };
 }
-const { src, poster, captions, label, loop = false, aspect = '1280 / 800' } = Astro.props;
+const { src, poster, captions, label, loop = false, aspect = '1280 / 800', dark } = Astro.props;
+const takes = dark ? [{ src, poster, theme: 'on-light' }, { ...dark, theme: 'on-dark' }] : [{ src, poster, theme: undefined }];
 ---
 
 <figure class="video">
-  <video
-    controls
-    playsinline
-    preload="metadata"
-    poster={poster}
-    aria-label={label}
-    style={{ aspectRatio: aspect }}
-    loop={loop}
-    muted={loop}
-    data-autoplay={loop ? '' : undefined}
-  >
-    <source src={src} type="video/mp4" />
-    {captions && <track kind="captions" srclang="en" label="English" src={captions} default />}
-  </video>
+  {takes.map(({ theme, ...take }) => (
+    <video
+      class={theme}
+      controls
+      playsinline
+      preload="metadata"
+      poster={take.poster}
+      aria-label={label}
+      style={{ aspectRatio: aspect }}
+      loop={loop}
+      muted={loop}
+      data-autoplay={loop ? '' : undefined}
+    >
+      <source src={take.src} type="video/mp4" />
+      {captions && <track kind="captions" srclang="en" label="English" src={captions} default />}
+    </video>
+  ))}
   <figcaption><slot /></figcaption>
 </figure>
 
