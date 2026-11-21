@@ -104,11 +104,11 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 @view-transition { navigation: auto; }
 
 ::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out); }
-/* Pages differ in height and scroll, so morphing between their boxes swept content in from far
-   above when leaving a scrolled page. The group snaps to the new page; only the fades move. */
-::view-transition-group(page) { animation: none; }
-::view-transition-old(page) { animation: 150ms var(--ease-out) both page-out; }
-::view-transition-new(page) { animation: none; }
+/* The page moves as the root snapshot: that's the viewport as it was on screen, so leaving a
+   scrolled page fades out what you were looking at. A named `main` snapshotted its whole box and
+   landed at the new page's top, flashing the old page scrolled back up. */
+::view-transition-old(root) { animation: 150ms var(--ease-out) both page-out; }
+::view-transition-new(root) { animation: none; }
 
 @keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
 
@@ -116,8 +116,8 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
    sets data-nav). The slide replaces the stagger, which would move content diagonally. */
 :root[data-nav='forward'] { --nav-x: 1; }
 :root[data-nav='back'] { --nav-x: -1; }
-:root[data-nav]::view-transition-old(page) { animation: 120ms var(--ease-out) both nav-out; }
-:root[data-nav]::view-transition-new(page) { animation: 250ms var(--ease-out) 40ms both nav-in; }
+:root[data-nav]::view-transition-old(root) { animation: 120ms var(--ease-out) both nav-out; }
+:root[data-nav]::view-transition-new(root) { animation: 250ms var(--ease-out) 40ms both nav-in; }
 :root[data-nav] :is(.rise, .stagger > *) { animation: none; }
 
 @keyframes nav-out { to { opacity: 0; transform: translateX(calc(var(--nav-x) * -16px)); } }
@@ -126,8 +126,9 @@ pre { padding: 1rem; border-radius: var(--radius); overflow-x: auto; font-size: 
 /* Theme switches use their own circular reveal (see ThemeToggle); keep page names out of it. */
 .theme-transition * { view-transition-name: none !important; }
 .theme-transition::view-transition { pointer-events: none; }
-.theme-transition::view-transition-old(root),
-.theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+/* :root raises these above the page rules, which data-nav keeps matching after a navigation. */
+:root.theme-transition::view-transition-old(root),
+:root.theme-transition::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }

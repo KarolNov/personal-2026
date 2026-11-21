@@ -22,7 +22,7 @@ const { title, description, image, stagger = true } = Astro.props;
   </head>
   <body>
     <Header />
-    <main class:list={['container', { stagger }]} style="view-transition-name: page">
+    <main class:list={['container', { stagger }]}>
       <slot />
     </main>
     <Footer />
