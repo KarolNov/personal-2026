@@ -1,0 +1,237 @@
+---
+title: Give the AI something to lean on
+description: AI is a very good performance engineer once it can measure, change something and measure again. What to give it so it stops guessing, a fix from Flex that only showed up on the server, and a perf harness you can copy.
+pubDate: 2026-12-01
+tags: [ai, performance, claude code]
+draft: true
+---
+
+import SeriesNav from '../../components/SeriesNav.astro';
+import LoadSheddingSim from '../../components/ai/LoadSheddingSim.astro';
+import Checklist from '../../components/Checklist.astro';
+import { AI_SERIES } from '../../lib/series';
+
+{/* DRAFT. Everything marked TODO needs a real number, trace or detail from Flex before this goes out. */}
+
+Ask an agent to "make the page load faster" and you'll get a confident answer within a minute. It will memoise a
+few things, defer a script, maybe cache a lookup. The diff looks reasonable. Whether the page is any faster is
+anyone's guess, including the agent's, because nothing in that loop measured anything.
+
+Now give the same agent a benchmark of the slow step, a number to beat and a way to run it again after each
+change. It behaves like a different engineer. It reads where the time actually goes, forms a hypothesis, tries it
+and tells you whether the number moved. When it didn't, it says so and tries something else.
+
+<SeriesNav series={AI_SERIES} current="give-the-ai-something-to-lean-on" />
+
+In the [last post](/blog/show-dont-prompt/) I wrote about how people talk to each other now that AI can write a
+wall of text in seconds: show your work instead of describing it. This one is the same idea from the other side.
+When you talk to the AI, a longer prompt rarely helps. What helps is giving it something solid to lean on: a map
+of the code, real data and written-down rules about what it may and may not touch. Performance work is where that
+difference is easiest to see, because it's where guessing is most expensive.
+
+## Close the loop
+
+Performance work has always been a loop: measure, change one thing, measure again. Good perf engineers are good
+mostly because they're disciplined about that loop, not because they guess better.
+
+AI is excellent at the middle step. It will happily try ten changes in the time it takes you to try one. The
+problem is the two steps around it. If it can't measure, every change is a guess, and a fast guesser with no
+feedback just produces plausible diffs faster. If it *can* measure, the same speed becomes the point: ten honest
+experiments, each with a number attached.
+
+So most of the work isn't in the prompt. It's in setting up the loop so the agent can run it on its own. Three
+things made the biggest difference for us:
+
+1. a map, so it finds the right code without wandering,
+2. data, so it starts from evidence instead of intuition,
+3. rules, so it knows what it's allowed to make worse.
+
+## A map, so it doesn't wander
+
+The first thing an agent does with a perf problem in a big codebase is go looking. In Flex that's a lot of looking:
+an editor, a sync engine, a renderer and years of features on top. Left alone, the agent greps, opens twenty files,
+builds a rough picture and then optimises whatever it happened to read last.
+
+What fixed that for me was giving it a map. I've been building [blueprint](/projects/blueprint/), a Claude Code
+plugin that maps a repo's capabilities to the code that implements them and keeps specs next to them. When the
+agent starts on "published experiences are slow to come alive", it doesn't start from `grep`. It starts from the
+capability that owns publishing and adoption, its requirements and the files behind it, and from the other
+capabilities that share those files and might pay for a change. The editor and the published page share a lot of
+code, so that last part matters: a shortcut in shared code can quietly break the editor.
+
+> **TODO:** confirm which capability the agent went to, and what it would have wandered into without the map. A
+> screenshot of the capability map with it selected would work well here (like the jambo one on the blueprint page).
+
+It doesn't have to be blueprint. A good `CLAUDE.md`, an architecture doc or a short "where things live" note all
+help. What matters is that the agent finds its way by reading something you wrote down on purpose, not by guessing
+from file names.
+
+## Data, so it doesn't guess
+
+The second thing is evidence. Agents are very persuasive about performance, and they're often wrong in the same
+way people are: they optimise what *looks* expensive. A nested loop, an object spread in a hot path, a
+`JSON.stringify`. Sometimes that's where the time goes. Usually it isn't.
+
+So I stopped describing the problem and started handing over data:
+
+- **A trace of the slow step.** Not "the page feels slow" but a recording of it loading, with the long tasks in
+  it.
+- **A number to beat.** "Rendering this experience on the server takes TODO ms, and adopting it in the browser
+  takes TODO ms. We want both lower."
+- **A fixed test case.** The same experiences, the same steps and the same CPU throttling every time, so two
+  measurements are comparable.
+- **Real-world numbers, when they exist.** What users actually see in production, so we fix the slow thing people
+  hit and not the slow thing that's easy to reproduce.
+
+> **TODO:** what Flex already had for this (RUM numbers, a perf dashboard, which experiences went into the test
+> set). Keep anything confidential vague, but the reader needs to see this is real data and not a toy.
+
+With that in hand the agent's first move changes. Instead of opening a file and looking for things to memoise, it
+runs the benchmark and asks where the time went.
+
+## Walkthrough: one change, two environments
+
+Some context first. When someone publishes an experience in Flex, the server renders it to plain HTML made of
+custom elements, so the page shows up straight away without waiting for any JavaScript. Then the client loads and
+*adopts* those elements: it claims the DOM the server already built and wires it up, instead of throwing it away
+and rendering it all again. That's hydration, and the same element code runs in both places.
+
+So the harness I built for the agent measures both:
+
+1. **Server-side rendering.** A benchmark that renders a fixed set of experiences to HTML, several times each, and
+   reports the median. TODO (how it runs: Node script / test runner, which experiences, how many runs).
+2. **Client adoption.** The browser loads the published HTML and the agent measures how long adoption takes. With
+   the [Chrome DevTools MCP server](https://github.com/ChromeDevTools/chrome-devtools-mcp) it drives a real Chrome:
+   it opens the page, records a performance trace while it loads, and reads the result back, with the CPU
+   throttled so a fast laptop behaves more like the machines our users have. TODO (confirm the setup: Chrome
+   DevTools MCP vs Claude in Chrome, the throttling level, what exactly is timed).
+
+Every change got measured in both. That turned out to be the important part.
+
+Here's one change from that work. Our elements emitted a `cmlChangedEvent` every time one of their attributes
+changed. It's a sensible thing to have: some code needs to know when an element changes. But very little code
+actually listened, and every element fired it for every attribute, including all the ones set while the element
+is first built. The fix was to make it opt-in: an element only creates and dispatches the event if something is
+listening for it.
+
+In the browser, that change barely moved the needle. If I'd only been measuring adoption, I'd have thrown it away as
+noise. On the server it made rendering up to 20% faster for some experiences.
+
+> **TODO:** why the server cares so much more. My guess for the draft: in the browser, creating and dispatching an
+> event nobody listens to is native code and very cheap, and adoption reuses attributes that are already there.
+> On the server every element is built from scratch, so every attribute gets set and fires an event, and TODO
+> (the server-side DOM is a JavaScript implementation, where each event is a few objects and a few function calls).
+> Confirm or correct.
+
+That's the bit I'd never have found by reading the code, and neither would the agent. Both environments run the
+same elements, so any reasoning about "is this expensive?" gives one answer. The measurements gave two.
+
+> **TODO:** one or two of the other tricks, briefly, ideally one that helped the client more than the server, so
+> the asymmetry goes both ways. A screenshot of the client trace or the benchmark output before and after would
+> work well here.
+
+## Rules, so it doesn't break what matters
+
+Speed is a trade, and an agent that's been told to make something faster will find trades you didn't intend. The
+quickest way to speed up a collaborative editor is to stop syncing. The quickest way to speed up a page load is to
+skip loading half of it. Both make the number look great.
+
+So the third thing is a short list, written down before any work starts: what must never get worse, and what can be
+degraded or paused when things get busy. In an editor like Flex, typing and seeing your own edits is required.
+Sending those edits to other people is required. Analytics, thumbnails, prefetching and how smoothly other people's
+cursors move are not: they can wait for a quieter moment.
+
+That list does two jobs. It tells the agent which trades are allowed, so "pause thumbnail generation while someone
+is dragging" is a fair idea and "batch outgoing edits every two seconds" isn't. And it gives the app itself a
+policy for heavy load, which is often where the biggest win is.
+
+<LoadSheddingSim>
+  A toy model of one frame in a collaborative editor, not real Flex numbers. Turn the load up with everything
+  treated as equally important and typing gets laggy. Switch to the required-vs-optional list and the editor pauses
+  optional work, least important first, until the frame fits again. Required work is never touched.
+</LoadSheddingSim>
+
+This is where an agent either becomes safe or becomes dangerous. Without the list, it makes reasonable-looking
+trades nobody agreed to. With it, it can be bold about the optional work and careful about the rest, and a
+reviewer can check the change against the list instead of against their own memory of what matters.
+
+> **TODO:** the real required/optional list for Flex, or the parts of it you're happy to share.
+
+## The result
+
+> **TODO:** the overall before/after across all the changes, not just the event fix. Say how long it took and how
+> much of it the agent did on its own.
+
+| Metric | Before | After | Measured with |
+| --- | --- | --- | --- |
+| Server-side render, TODO experience | TODO | TODO | SSR benchmark, median of TODO runs |
+| Client adoption, TODO experience | TODO | TODO | Chrome trace, TODO× CPU throttling |
+| `cmlChangedEvent` opt-in alone, SSR | — | up to 20% faster | SSR benchmark |
+
+The number matters less than how we got it. Every change came with a measurement in both environments. The ones
+that didn't move either number were thrown away instead of shipped "because they can't hurt", and the ones that
+only helped one side were kept because we could see which side.
+
+## Copy this: a perf harness
+
+Here's the template I now start perf work with. It's a short doc the agent reads first: in the repo, in your notes
+tool or as part of a skill. Fill in the blanks for your app.
+
+```markdown
+# Perf harness: <the slow thing>
+
+## Goal
+<Metric> on <scenario> is <current> at p75. Target: <target>.
+Stop when we hit the target or nothing in the trace is worth chasing.
+
+## How to measure
+- Environments: <every place the code runs, e.g. server render and client hydration>. Measure each one.
+- Scenario: <exact steps>, on <test data / document>.
+- Setup: <build mode>, <CPU throttling>, <network>, fresh tab, extensions off.
+- Tool: <e.g. Chrome DevTools MCP performance trace, a benchmark script, a load test>.
+- Run it <N> times and report the median, not the best run.
+
+## Where to look
+- Map: <capability map / architecture doc / CLAUDE.md section>.
+- Likely areas: <files or modules>, and why.
+- Out of scope: <areas not to touch in this pass>.
+
+## Required (must never get worse)
+- <e.g. typing latency, own edits visible immediately>
+- <e.g. edits reach other people within N ms>
+- <tests that must stay green>
+
+## Optional (may be degraded or paused under load, in this order)
+1. <e.g. analytics: queue and send later>
+2. <e.g. prefetching>
+3. <e.g. thumbnails>
+4. <e.g. remote cursors: update less often>
+
+## Rules for each change
+- One change at a time. Measure before and after, in every environment above.
+- Report: hypothesis, change, before, after, and whether to keep it.
+- Throw away changes that don't move any number. Keep ones that help one environment and don't hurt the others.
+- Never trade away anything in Required. If a trade needs that, stop and ask.
+```
+
+Before you hand a perf task to an agent:
+
+<Checklist
+  items={[
+    ['Can it measure?', 'A trace, a benchmark or a load test it can run on its own, on the same setup every time.'],
+    ['Does it measure everywhere the code runs?', 'Server and client can disagree about what’s expensive.'],
+    ['Does it have a number to beat?', 'A current value and a target, not “make it faster”.'],
+    ['Can it find its way?', 'A map, a doc or a note that tells it where things live.'],
+    ['Does it know what it may make worse?', 'A written list of what’s required and what can be paused.'],
+    ['Will it show its work?', 'Every change comes back with a before, an after and a reason to keep it.'],
+  ]}
+/>
+
+## Further reading
+
+- **[blueprint](/projects/blueprint/)**: the plugin I use to give agents a map of a repo and keep specs next to
+  the code.
+- **[Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp)**: lets an agent record and read
+  performance traces in a real Chrome.
+- **[Show, don't prompt](/blog/show-dont-prompt/)**: the first post in this series, about the people side of the
+  same idea.
