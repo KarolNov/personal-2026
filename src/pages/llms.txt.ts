@@ -1,6 +1,6 @@
 import { GITHUB_URL, LINKEDIN_URL } from '../consts';
 import { getPosts } from '../lib/posts';
-import { getProjects } from '../lib/projects';
+import { getProjects, projectUrl } from '../lib/projects';
 import { HEADER, listText, postMarkdownUrl, siteUrl } from '../lib/llms';
 
 export async function GET() {
@@ -16,7 +16,7 @@ ${posts.map((post) => `- [${listText(post.data.title)}](${postMarkdownUrl(post)}
 
 ## Projects
 
-${projects.map((p) => `- [${listText(p.data.title)}](${siteUrl(`/projects/${p.id}/`)}): ${listText(p.data.summary)}`).join('\n')}
+${projects.map((p) => `- [${listText(p.data.title)}](${siteUrl(projectUrl(p))}): ${listText(p.data.summary)}`).join('\n')}
 
 ## Pages
 

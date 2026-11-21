@@ -16,7 +16,9 @@ const sections = [
     items: projects.filter((p) => p.data.kind === 'side'),
   },
 ];
-let i = 2;
+// Entrance order down the page, capped so the last items don't wait on a long list.
+let n = 2;
+const step = () => Math.min(n++, 8);
 ---
 
 <BaseLayout title="Projects" description="Products I've built at work and side projects with demos and repos." stagger={false}>
@@ -27,10 +29,10 @@ let i = 2;
 
   {sections.map((section) => (
     <section>
-      <h2 class="rise" style={{ '--i': i++ }}>{section.title}</h2>
-      <p class="intro muted rise" style={{ '--i': i }}>{section.intro}</p>
+      <h2 class="rise" style={{ '--i': step() }}>{section.title}</h2>
+      <p class="intro muted rise" style={{ '--i': step() }}>{section.intro}</p>
       <ul class="grid">
-        {section.items.map((project) => <ProjectCard project={project} i={Math.min(i++, 8)} />)}
+        {section.items.map((project) => <ProjectCard project={project} i={step()} />)}
       </ul>
     </section>
   ))}
