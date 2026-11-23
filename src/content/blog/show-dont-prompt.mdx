@@ -9,6 +9,8 @@ import MeatProxyChat from '../../components/ai/MeatProxyChat.astro';
 import ShowDontTellPR from '../../components/ai/ShowDontTellPR.astro';
 import Video from '../../components/Video.astro';
 import Checklist from '../../components/Checklist.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+import { AI_SERIES } from '../../lib/series';
 
 You've probably seen this happen. Someone asks a question in a thread. A colleague pastes it into an LLM, copies
 the answer and posts it back: eight paragraphs, three headings, a bulleted list of "key considerations" and a
@@ -27,6 +29,8 @@ Here's what that looks like on a product team, and what it looks like when a per
 
 A lot of organisations have run into this in the last year or two. It's easy to do, and it feels like being
 helpful.
+
+<SeriesNav series={AI_SERIES} current="show-dont-prompt" />
 
 ## Writing got cheap. Reading didn't.
 
@@ -147,3 +151,7 @@ the people paying for it are everyone else.
 
 Next time: the same idea from the other side. Not how you talk to people, but how you talk to the AI, and why
 it does its best work when you give it something solid to lean on instead of a long prompt.
+
+<div id="series">
+  <SeriesNav series={AI_SERIES} current="show-dont-prompt" />
+</div>
