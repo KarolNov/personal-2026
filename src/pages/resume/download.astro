@@ -24,6 +24,7 @@ const sitekey = env.TURNSTILE_SITEKEY;
       data-callback="resumeCheckPassed"
       data-error-callback="resumeCheckFailed"
       data-expired-callback="resumeCheckExpired"
+      data-refresh-expired="manual"
     ></div>
   ) : (
     <p class="notice error" role="alert">The spam check isn't configured here (TURNSTILE_SITEKEY is missing).</p>
@@ -56,7 +57,10 @@ const sitekey = env.TURNSTILE_SITEKEY;
     };
 
     // Turnstile calls these by name (data-callback and friends).
+    // Once the file is down, a later expiry is nothing to report (and must not start another download).
+    let done = false;
     window.resumeCheckPassed = async (token) => {
+      if (done) return;
       say('Check passed. Starting your download…');
       try {
         const res = await fetch('/api/resume', { method: 'POST', body: new URLSearchParams({ 'cf-turnstile-response': token }) });
@@ -66,6 +70,7 @@ const sitekey = env.TURNSTILE_SITEKEY;
         document.body.appendChild(a);
         a.click();
         a.remove();
+        done = true;
         say('Downloaded. This tab will close in a moment.', 'success');
         // Give the browser time to hand the file to its downloads before the tab (and the blob) goes.
         // Browsers only let a page close a tab it was opened into; otherwise the message stays.
@@ -79,7 +84,7 @@ const sitekey = env.TURNSTILE_SITEKEY;
       }
     };
     window.resumeCheckFailed = () => fail("The check didn't load or didn't pass.");
-    window.resumeCheckExpired = () => fail('The check expired.');
+    window.resumeCheckExpired = () => done || fail('The check expired.');
   </script>
 </BaseLayout>
 

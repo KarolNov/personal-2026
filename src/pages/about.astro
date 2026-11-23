@@ -220,9 +220,11 @@ const contributions = await getContributions(github);
       background-color 200ms var(--ease-out),
       transform 160ms var(--ease-out);
   }
-  /* The quieter pill beside it: a plain outline that warms to the accent on hover. */
   /* The heading and its action share a line, like a role's title and dates. */
+  /* The h2's margins can't collapse inside the flex box, so the wrapper carries them instead. */
   .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.25rem 1rem; }
+  .section-head { margin-block: calc(0.83 * 1.1rem); }
+  .section-head h2 { margin: 0; }
   /* A quiet text action: muted until it's wanted, so it doesn't compete with the heading. */
   .resume {
     display: inline-flex;

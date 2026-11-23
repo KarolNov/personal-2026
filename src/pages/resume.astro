@@ -11,7 +11,8 @@ import { getProjects } from '../lib/projects';
 import { SITE_TITLE, GITHUB_LOGIN, GITHUB_URL, LINKEDIN_URL } from '../consts';
 
 const site = Astro.site!;
-const sideProjects = (await getProjects()).filter((p) => p.data.kind === 'side');
+// getProjects() includes drafts in `astro dev`, which prints the private copies; keep them out.
+const sideProjects = (await getProjects()).filter((p) => p.data.kind === 'side' && !p.data.draft);
 // The email goes only on the private copy: it's read from .env.local (gitignored) and only in
 // `astro dev`, so the built site and its public PDF never contain it.
 const email = import.meta.env.DEV ? import.meta.env.RESUME_EMAIL : undefined;
