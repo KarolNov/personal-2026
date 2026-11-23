@@ -1,6 +1,6 @@
 // The About page's Download resume button. The PDF sits behind a Turnstile check
 // (src/pages/api/resume.ts), so a click loads Turnstile, gets a token (invisibly unless Cloudflare
-// wants an interaction, which shows its box beside the button), posts it and saves the file.
+// wants an interaction, which shows its box under the Work heading), posts it and saves the file.
 // Turnstile isn't loaded until someone asks for the resume.
 
 interface Turnstile {
@@ -30,8 +30,8 @@ function loadTurnstile() {
 export function initResumeDownload() {
   const form = document.querySelector<HTMLFormElement>('.resume-form');
   const button = form?.querySelector<HTMLButtonElement>('.resume');
-  const check = form?.querySelector<HTMLElement>('.resume-check');
-  const status = form?.querySelector<HTMLElement>('.resume-status');
+  const check = document.querySelector<HTMLElement>('.resume-check');
+  const status = document.querySelector<HTMLElement>('.resume-status');
   if (!form || !button || !check || !status) return;
 
   const busy = (on: boolean) => {

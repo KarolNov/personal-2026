@@ -29,16 +29,22 @@ const contributions = await getContributions(github);
     Before Ceros I spent two years at a software house and freelanced building websites and web apps.
   </p>
 
-  {/* The PDF comes from /api/resume after a Turnstile check (see the script below). Without
-      JavaScript the post has no token and the endpoint turns it away. */}
-  <form class="resume-form" method="post" action="/api/resume">
-    <button class="resume" type="submit">Download resume</button>
-    <span class="resume-check"></span>
-    <span class="resume-status muted" role="status"></span>
-  </form>
-
   <section>
-    <h2>Work</h2>
+    {/* The resume is the Work section as a PDF, so it's offered as that section's action, on the
+        heading's line the way each role's dates sit on its title's. The PDF comes from /api/resume
+        after a Turnstile check (src/scripts/resume-download.ts); without JavaScript the post has no
+        token and the endpoint turns it away. */}
+    <div class="section-head">
+      <h2>Work</h2>
+      <form class="resume-form" method="post" action="/api/resume">
+        <button class="resume" type="submit">
+          Download resume
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v8m0 0L4.5 7M8 10.5 11.5 7M3 13.5h10" /></svg>
+        </button>
+      </form>
+    </div>
+    <span class="resume-check"></span>
+    <p class="resume-status" role="status"></p>
     <div class="timeline">
       <ol class="roles">
         {roles.map((role) => (
@@ -220,28 +226,37 @@ const contributions = await getContributions(github);
       transform 160ms var(--ease-out);
   }
   /* The quieter pill beside it: a plain outline that warms to the accent on hover. */
-  .resume-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1.5rem; }
-  /* Interaction-only Turnstile: empty unless Cloudflare wants a click, then the box appears here. */
-  .resume-check:empty, .resume-status:empty { display: none; }
-  .resume-status { font-size: 0.9rem; }
+  /* The heading and its action share a line, like a role's title and dates. */
+  .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.25rem 1rem; }
+  /* A quiet text action: muted until it's wanted, so it doesn't compete with the heading. */
   .resume {
-    display: inline-block;
-    font: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0;
+    border: 0;
     background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.9rem;
     cursor: pointer;
-    padding: 0.3rem 0.9rem;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--fg);
-    font-weight: 600;
-    text-decoration: none;
-    transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out), transform 160ms var(--ease-out);
+    transition: color 150ms ease, transform 160ms var(--ease-out);
   }
+  .resume svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms var(--ease-out); }
   .resume:active { transform: scale(0.97); }
-  .resume[aria-busy='true'] { cursor: progress; opacity: 0.7; }
+  .resume[aria-busy='true'] { cursor: progress; }
+  .resume[aria-busy='true'] svg { animation: nudge 700ms var(--ease-in-out) infinite alternate; }
+  @keyframes nudge { to { transform: translateY(2px); } }
   @media (hover: hover) and (pointer: fine) {
-    .resume:hover { border-color: var(--accent); color: var(--accent); }
+    .resume:hover { color: var(--accent); }
+    .resume:hover svg { transform: translateY(1px); }
   }
+  /* Interaction-only Turnstile: empty unless Cloudflare wants a click, then the box appears under
+     the heading. The status line only shows when something went wrong. */
+  .resume-check { display: block; }
+  .resume-check:not(:empty) { margin-bottom: 1rem; }
+  .resume-status { margin: 0 0 1rem; font-size: 0.9rem; color: var(--danger); }
+  .resume-status:empty { display: none; }
   .touch.lit { color: var(--accent-fg); border-color: var(--accent-bg); }
   .touch:active { transform: scale(0.97); }
   /* Hover only where there's a real pointer; on touch it would stick after a tap. */
@@ -262,6 +277,7 @@ const contributions = await getContributions(github);
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
+    .resume[aria-busy='true'] svg { animation: none; }
   }
 </style>
 
