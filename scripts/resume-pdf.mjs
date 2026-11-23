@@ -1,8 +1,9 @@
 // Renders the resume (src/pages/resume.astro) to PDF with headless Chrome:
-//   public/Karol-Novljakovic-Resume.pdf   the copy linked from /about/. Printed from the production
-//                                         build, which never contains the email.
-//   resume-private/*.pdf (gitignored)     copies with RESUME_EMAIL from .env.local, printed from
-//                                         `astro dev`, for sending out.
+//   src/assets/Karol-Novljakovic-Resume.pdf  the copy behind the About page's Download resume
+//                                            button (src/pages/api/resume.ts, Turnstile-gated).
+//                                            Printed from the production build, so no email.
+//   resume-private/*.pdf (gitignored)        copies with RESUME_EMAIL from .env.local, printed
+//                                            from `astro dev`, for sending out.
 // Run with `npm run resume`.
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -11,7 +12,7 @@ import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const PUBLIC_PDF = 'public/Karol-Novljakovic-Resume.pdf';
+const PUBLIC_PDF = 'src/assets/Karol-Novljakovic-Resume.pdf';
 const PRIVATE = [
   { file: 'resume-private/Karol-Novljakovic-Resume.pdf', query: '' },
   { file: 'resume-private/Karol-Novljakovic-Resume-Linear.pdf', query: '?with=linear-weather' },

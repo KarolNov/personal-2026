@@ -29,6 +29,14 @@ const contributions = await getContributions(github);
     Before Ceros I spent two years at a software house and freelanced building websites and web apps.
   </p>
 
+  {/* The PDF comes from /api/resume after a Turnstile check (see the script below). Without
+      JavaScript the post has no token and the endpoint turns it away. */}
+  <form class="resume-form" method="post" action="/api/resume">
+    <button class="resume" type="submit">Download resume</button>
+    <span class="resume-check"></span>
+    <span class="resume-status muted" role="status"></span>
+  </form>
+
   <section>
     <h2>Work</h2>
     <div class="timeline">
@@ -99,8 +107,6 @@ const contributions = await getContributions(github);
     <h2>Elsewhere</h2>
     <p class="elsewhere">
       <a class="touch" href="/contact/">Get in touch</a>
-      {/* Made by `npm run resume` (scripts/resume-pdf.mjs); this public copy has no email. */}
-      <a class="resume" href="/Karol-Novljakovic-Resume.pdf" download>Download resume</a>
       <span><span class="muted">or find me on</span> <a href={GITHUB_URL}>GitHub</a> · <a href={LINKEDIN_URL}>LinkedIn</a> · <a href={`https://x.com/${TWITTER_HANDLE.slice(1)}`}>X</a></span>
     </p>
   </section>
@@ -214,8 +220,15 @@ const contributions = await getContributions(github);
       transform 160ms var(--ease-out);
   }
   /* The quieter pill beside it: a plain outline that warms to the accent on hover. */
+  .resume-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1.5rem; }
+  /* Interaction-only Turnstile: empty unless Cloudflare wants a click, then the box appears here. */
+  .resume-check:empty, .resume-status:empty { display: none; }
+  .resume-status { font-size: 0.9rem; }
   .resume {
     display: inline-block;
+    font: inherit;
+    background: none;
+    cursor: pointer;
     padding: 0.3rem 0.9rem;
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -225,6 +238,7 @@ const contributions = await getContributions(github);
     transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out), transform 160ms var(--ease-out);
   }
   .resume:active { transform: scale(0.97); }
+  .resume[aria-busy='true'] { cursor: progress; opacity: 0.7; }
   @media (hover: hover) and (pointer: fine) {
     .resume:hover { border-color: var(--accent); color: var(--accent); }
   }
@@ -253,6 +267,8 @@ const contributions = await getContributions(github);
 
 <script>
   import { initScrollBall } from '../scripts/scroll-ball';
+  import { initResumeDownload } from '../scripts/resume-download';
 
   initScrollBall();
+  initResumeDownload();
 </script>

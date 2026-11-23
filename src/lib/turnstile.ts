@@ -51,7 +51,11 @@ export async function verifyTurnstile(
     return false;
   }
 
-  if (!result.success || result.action !== expectedAction || !hostnames.has(result.hostname ?? '')) {
+  // Cloudflare's test secrets (local dev and Workers Previews) answer without an action, so there
+  // it can't be checked. A real secret always gets the action checked.
+  const testSecret = /^[123]x0{31}AA$/.test(secret);
+  const actionOk = result.action === expectedAction || (testSecret && result.action === undefined);
+  if (!result.success || !actionOk || !hostnames.has(result.hostname ?? '')) {
     console.warn('turnstile: verification rejected', {
       success: result.success,
       action: result.action,
