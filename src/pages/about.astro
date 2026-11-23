@@ -31,20 +31,15 @@ const contributions = await getContributions(github);
 
   <section>
     {/* The resume is the Work section as a PDF, so it's offered as that section's action, on the
-        heading's line the way each role's dates sit on its title's. The PDF comes from /api/resume
-        after a Turnstile check (src/scripts/resume-download.ts); without JavaScript the post has no
-        token and the endpoint turns it away. */}
+        heading's line the way each role's dates sit on its title's. It opens a tab with a visible
+        Turnstile check (src/pages/resume/download.astro) that downloads the PDF and closes itself. */}
     <div class="section-head">
       <h2>Work</h2>
-      <form class="resume-form" method="post" action="/api/resume">
-        <button class="resume" type="submit">
-          Download resume
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v8m0 0L4.5 7M8 10.5 11.5 7M3 13.5h10" /></svg>
-        </button>
-      </form>
+      <a class="resume" href="/resume/download/" target="_blank">
+        Download resume
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v8m0 0L4.5 7M8 10.5 11.5 7M3 13.5h10" /></svg>
+      </a>
     </div>
-    <span class="resume-check"></span>
-    <p class="resume-status" role="status"></p>
     <div class="timeline">
       <ol class="roles">
         {roles.map((role) => (
@@ -233,30 +228,17 @@ const contributions = await getContributions(github);
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0;
-    border: 0;
-    background: none;
     color: var(--muted);
-    font: inherit;
     font-size: 0.9rem;
-    cursor: pointer;
+    text-decoration: none;
     transition: color 150ms ease, transform 160ms var(--ease-out);
   }
   .resume svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms var(--ease-out); }
   .resume:active { transform: scale(0.97); }
-  .resume[aria-busy='true'] { cursor: progress; }
-  .resume[aria-busy='true'] svg { animation: nudge 700ms var(--ease-in-out) infinite alternate; }
-  @keyframes nudge { to { transform: translateY(2px); } }
   @media (hover: hover) and (pointer: fine) {
     .resume:hover { color: var(--accent); }
     .resume:hover svg { transform: translateY(1px); }
   }
-  /* Interaction-only Turnstile: empty unless Cloudflare wants a click, then the box appears under
-     the heading. The status line only shows when something went wrong. */
-  .resume-check { display: block; }
-  .resume-check:not(:empty) { margin-bottom: 1rem; }
-  .resume-status { margin: 0 0 1rem; font-size: 0.9rem; color: var(--danger); }
-  .resume-status:empty { display: none; }
   .touch.lit { color: var(--accent-fg); border-color: var(--accent-bg); }
   .touch:active { transform: scale(0.97); }
   /* Hover only where there's a real pointer; on touch it would stick after a tap. */
@@ -277,14 +259,11 @@ const contributions = await getContributions(github);
   /* Reduced motion: no travel or trail. Underlines fade in at their heading (see the script). */
   @media (prefers-reduced-motion: reduce) {
     .roles > li { transition: none; }
-    .resume[aria-busy='true'] svg { animation: none; }
   }
 </style>
 
 <script>
   import { initScrollBall } from '../scripts/scroll-ball';
-  import { initResumeDownload } from '../scripts/resume-download';
 
   initScrollBall();
-  initResumeDownload();
 </script>

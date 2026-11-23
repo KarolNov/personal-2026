@@ -1,0 +1,97 @@
+---
+import { env } from 'cloudflare:workers';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// Opened in a new tab by the About page's Download resume link. A visible Turnstile check; once it
+// passes, the token goes to /api/resume, the PDF downloads and the tab closes itself.
+export const prerender = false;
+
+const sitekey = env.TURNSTILE_SITEKEY;
+---
+
+<BaseLayout title="Download resume" description="A quick check before the resume downloads.">
+  <meta slot="head" name="robots" content="noindex" />
+  <script slot="head" is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+  <h1>Resume</h1>
+  <p class="muted lead">One quick check and the download starts.</p>
+
+  {sitekey ? (
+    <div
+      class="cf-turnstile"
+      data-sitekey={sitekey}
+      data-action="resume"
+      data-callback="resumeCheckPassed"
+      data-error-callback="resumeCheckFailed"
+      data-expired-callback="resumeCheckExpired"
+    ></div>
+  ) : (
+    <p class="notice error" role="alert">The spam check isn't configured here (TURNSTILE_SITEKEY is missing).</p>
+  )}
+  <noscript><p class="notice error">Please enable JavaScript — it's needed for the spam check.</p></noscript>
+
+  <p class="status" role="status" aria-live="polite"></p>
+  {/* Shown after a failure. No automatic retry: a passing check against a failing server would loop. */}
+  <button class="button secondary retry" type="button" hidden>Try again</button>
+  <p class="back"><a href="/about/">Back to About</a></p>
+
+  <script is:inline>
+    // Match a manual theme override; Turnstile's default 'auto' only follows the OS.
+    document.querySelector('.cf-turnstile')?.setAttribute('data-theme', document.documentElement.dataset.theme ?? 'auto');
+
+    const status = document.querySelector('.status');
+    const retry = document.querySelector('.retry');
+    const fail = (text) => {
+      say(text, 'error');
+      retry.hidden = false;
+    };
+    retry.addEventListener('click', () => {
+      retry.hidden = true;
+      say('');
+      window.turnstile?.reset();
+    });
+    const say = (text, kind = '') => {
+      status.textContent = text;
+      status.className = `status ${kind}`;
+    };
+
+    // Turnstile calls these by name (data-callback and friends).
+    window.resumeCheckPassed = async (token) => {
+      say('Check passed. Starting your download…');
+      try {
+        const res = await fetch('/api/resume', { method: 'POST', body: new URLSearchParams({ 'cf-turnstile-response': token }) });
+        if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status}).`);
+        const url = URL.createObjectURL(await res.blob());
+        const a = Object.assign(document.createElement('a'), { href: url, download: 'Karol-Novljakovic-Resume.pdf' });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        say('Downloaded. This tab will close in a moment.', 'success');
+        // Give the browser time to hand the file to its downloads before the tab (and the blob) goes.
+        // Browsers only let a page close a tab it was opened into; otherwise the message stays.
+        setTimeout(() => {
+          window.close();
+          setTimeout(() => say('Downloaded. You can close this tab.', 'success'), 300);
+        }, 1500);
+      } catch (err) {
+        console.error(err);
+        fail(`Couldn't get the resume. ${err.message}`);
+      }
+    };
+    window.resumeCheckFailed = () => fail("The check didn't load or didn't pass.");
+    window.resumeCheckExpired = () => fail('The check expired.');
+  </script>
+</BaseLayout>
+
+<style>
+  .lead { margin-top: 0; }
+  .cf-turnstile { min-height: 65px; margin-top: 1.5rem; }
+  .status { min-height: 1.65em; margin: 1rem 0 0; font-size: 0.95rem; }
+  .status.success { color: var(--success); }
+  .status.error { color: var(--danger); }
+  .notice { padding: 0.9rem 1rem; border-radius: var(--radius); border: 1px solid currentColor; }
+  .notice.error { color: var(--danger); }
+  .retry { margin-top: 0.75rem; }
+  .retry:active { transform: scale(0.97); }
+  .back { margin-top: 2.5rem; font-size: 0.9rem; }
+</style>
