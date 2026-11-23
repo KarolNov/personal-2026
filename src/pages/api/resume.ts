@@ -1,0 +1,35 @@
+import type { APIRoute } from 'astro';
+import { checkTurnstile } from '../../lib/turnstile';
+// Inlined into the Worker rather than served as a static asset, so the only way to the file is
+// through the Turnstile check below. Made by `npm run resume` (scripts/resume-pdf.mjs), no email.
+import pdfDataUrl from '../../assets/Karol-Novljakovic-Resume.pdf?inline';
+
+export const prerender = false;
+
+const FILENAME = 'Karol-Novljakovic-Resume.pdf';
+const pdf = Uint8Array.from(atob(pdfDataUrl.slice(pdfDataUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+
+/** The PDF, for a Turnstile token from the download page (src/pages/resume/download.astro). */
+export const POST: APIRoute = async ({ request, clientAddress }) => {
+  let token: unknown;
+  try {
+    token = (await request.formData()).get('cf-turnstile-response');
+  } catch {
+    return new Response('Bad request', { status: 400 });
+  }
+
+  const check = await checkTurnstile(token, 'resume', clientAddress);
+  if (!check.ok) {
+    // The reason (a siteverify error code or the mismatched field) makes a failure diagnosable
+    // from the page; it's nothing a visitor couldn't learn from Turnstile itself.
+    return new Response(`We couldn't verify you're human (${check.reason}).`, { status: 403 });
+  }
+
+  return new Response(pdf, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${FILENAME}"`,
+      'Cache-Control': 'no-store',
+    },
+  });
+};

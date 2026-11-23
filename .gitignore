@@ -17,3 +17,6 @@ npm-debug.log*
 
 # OS
 .DS_Store
+
+# resume copies with my email, made by scripts/resume-pdf.mjs
+resume-private/

@@ -3,60 +3,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ContributionGraph from '../components/ContributionGraph.astro';
 import LiveContributionGraph from '../components/LiveContributionGraph.astro';
 import { getContributions } from '../lib/contributions';
+import { roles } from '../lib/roles';
 import { GITHUB_LOGIN, GITHUB_URL, LINKEDIN_URL, TWITTER_HANDLE } from '../consts';
 
 // The page is prerendered with the contribution graph as of the build; the live island
 // (src/components/LiveContributionGraph.astro) swaps in current data after load.
 const github = GITHUB_LOGIN;
 const contributions = await getContributions(github);
-
-const roles = [
-  {
-    title: 'Principal Software Engineer',
-    when: '2025 – now',
-    project: 'Ceros Flex',
-    points: [
-      'Led the move of our sync engine from two-way syncing to an intent-based operations pipeline: every change is validated, normalised and auto-fixed before it lands, so documents stay consistent across collaborators, offline edits and version history.',
-      'Helped shape how the DOM tree lives in the CRDT, with fractional indexing so concurrent moves stay conflict-free and cheap to observe on the client.',
-      'Built a way for customers to bring content made in Flex into their own sites and apps without relying on iframes.',
-      'Worked on performance across the stack — for example, a few recent changes made our server-side and static rendering around 30% faster.',
-    ],
-    stack: ['Next.js', 'Y.js', 'WebSockets', 'NestJS', 'PostgreSQL', 'Terraform'],
-  },
-  {
-    title: 'Lead Software Engineer',
-    when: '2024 – 2025',
-    project: 'Ceros Flex',
-    points: [
-      'Led a team of up to eight senior engineers rebuilding Ceros Studio — a client-heavy visual editor in the same family as Figma or Framer — and helped my reports grow into staff and lead roles.',
-      'Set the frontend architecture: real-time collaboration with offline and version history (Y.js), an extensible visual HTML editor built on Web Components, and a DSL that can be edited both visually and as code, which made adding AI collaborators straightforward.',
-      'Was part of a cross-team effort with QE and DevOps on our end-to-end pipeline: around 10,000 Playwright tests on custom AWS runners in 6–8 minutes on every PR.',
-      'Helped reshape our engineering culture at Ceros, balancing quality, security and speed of delivery in the age of AI-assisted development.',
-    ],
-    stack: ['Lit / Web Components', 'Turborepo', 'Vite', 'Vitest', 'Playwright'],
-  },
-  {
-    title: 'Senior Staff Software Engineer',
-    when: '2024',
-    project: 'AI assistant',
-    points: [
-      'Built an AI assistant that worked across Ceros products, with ideas that were early at the time: a voice-to-voice mode before realtime APIs were common, artifact-style outputs, and a visual guide that let vision models point at exact spots on an image.',
-      'The project was sunset after a change in leadership and strategy, but what we learned building it carried into AI features across Ceros products.',
-    ],
-    stack: ['React', 'Python', 'FastAPI', 'LangChain', 'Temporal', 'Pinecone'],
-  },
-  {
-    title: 'Senior, then Lead Software Engineer',
-    when: '2020 – 2024',
-    project: 'MarkUp.io',
-    points: [
-      'Joined early and spent four years on a product for commenting directly on live websites — which meant learning the limits of the web the hard way: proxying and shimming third-party sites into iframes, pins that stick to elements, and a Chrome extension for pages that refuse to be embedded.',
-      'Built a native screenshot pipeline (snapshot, rebuild, headless browser) that beat any HTML-to-image library on consistency, and helped architect instant and digest notifications for email, Slack and Teams.',
-      'Learned to build from customer evidence: analytics, customer learning sessions and a Slack community where you see the effect of a fix the same day.',
-    ],
-    stack: ['React', 'Express', 'BullMQ', 'AWS SQS', 'DynamoDB', 'Chrome extension'],
-  },
-];
 ---
 
 <BaseLayout
@@ -77,7 +30,16 @@ const roles = [
   </p>
 
   <section>
-    <h2>Work</h2>
+    {/* The resume is the Work section as a PDF, so it's offered as that section's action, on the
+        heading's line the way each role's dates sit on its title's. It opens a tab with a visible
+        Turnstile check (src/pages/resume/download.astro) that downloads the PDF and closes itself. */}
+    <div class="section-head">
+      <h2>Work</h2>
+      <a class="resume" href="/resume/download/" target="_blank">
+        Download resume
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v8m0 0L4.5 7M8 10.5 11.5 7M3 13.5h10" /></svg>
+      </a>
+    </div>
     <div class="timeline">
       <ol class="roles">
         {roles.map((role) => (
@@ -257,6 +219,27 @@ const roles = [
       border-color 200ms var(--ease-out),
       background-color 200ms var(--ease-out),
       transform 160ms var(--ease-out);
+  }
+  /* The heading and its action share a line, like a role's title and dates. */
+  /* The h2's margins can't collapse inside the flex box, so the wrapper carries them instead. */
+  .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.25rem 1rem; }
+  .section-head { margin-block: calc(0.83 * 1.1rem); }
+  .section-head h2 { margin: 0; }
+  /* A quiet text action: muted until it's wanted, so it doesn't compete with the heading. */
+  .resume {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 150ms ease, transform 160ms var(--ease-out);
+  }
+  .resume svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms var(--ease-out); }
+  .resume:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .resume:hover { color: var(--accent); }
+    .resume:hover svg { transform: translateY(1px); }
   }
   .touch.lit { color: var(--accent-fg); border-color: var(--accent-bg); }
   .touch:active { transform: scale(0.97); }

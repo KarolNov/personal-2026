@@ -1,0 +1,196 @@
+---
+// A printable resume: the About page's roles and the side projects, laid out for A4 in the site's
+// light theme. Print it from the browser (Save as PDF) to get the file to send.
+// Side projects that only matter to some applications are left out unless named in the URL,
+// e.g. /resume/?with=linear-weather for a job at Linear.
+import { Image } from 'astro:assets';
+import portrait from '../assets/karol.jpg';
+import BaseHead from '../components/BaseHead.astro';
+import { roles } from '../lib/roles';
+import { getProjects } from '../lib/projects';
+import { SITE_TITLE, GITHUB_LOGIN, GITHUB_URL, LINKEDIN_URL } from '../consts';
+
+const site = Astro.site!;
+// getProjects() includes drafts in `astro dev`, which prints the private copies; keep them out.
+const sideProjects = (await getProjects()).filter((p) => p.data.kind === 'side' && !p.data.draft);
+// The email goes only on the private copy: it's read from .env.local (gitignored) and only in
+// `astro dev`, so the built site and its public PDF never contain it.
+const email = import.meta.env.DEV ? import.meta.env.RESUME_EMAIL : undefined;
+
+/** Shown only when listed in ?with= (comma-separated project ids). */
+const OPTIONAL = new Set(['linear-weather']);
+const bare = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+---
+
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <BaseHead title="Resume" description="Resume of Karol Novljaković, principal software engineer." />
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <main class="sheet">
+      <header class="top">
+        <Image class="photo" src={portrait} alt="" width={180} height={180} loading="eager" />
+        <div class="who">
+          <h1>{SITE_TITLE}</h1>
+          <p class="role">Principal Software Engineer</p>
+        </div>
+        <ul class="contact">
+          {email && <li><a href={`mailto:${email}`}>{email}</a></li>}
+          <li><a href={site.href}>{bare(site.href)}</a></li>
+          <li><a href={LINKEDIN_URL}>{bare(LINKEDIN_URL)}</a></li>
+          <li><a href={GITHUB_URL}>github.com/{GITHUB_LOGIN}</a></li>
+          <li class="muted">Poland · open to remote</li>
+        </ul>
+      </header>
+
+      <p class="lede">
+        Principal software engineer with years of building complex, user-centric web products — from visual
+        editors with real-time collaboration to AI tools and the infrastructure behind them. I care most about the
+        space where engineering, user needs and product meet, and I'm looking for a small remote team with clear goals.
+      </p>
+
+      <section>
+        <h2>Experience</h2>
+        <p class="employer"><strong>Ceros</strong> <span class="muted">· 2020 – now</span></p>
+        <ol class="roles">
+          {roles.map((role) => (
+            <li>
+              <div class="role-head">
+                <h3>{role.title} <span class="muted">· {role.project}</span></h3>
+                <span class="muted when">{role.when}</span>
+              </div>
+              <ul class="points">
+                {role.points.map((point) => <li>{point}</li>)}
+              </ul>
+              <ul class="tags" aria-label="Stack">
+                {role.stack.map((tool) => <li>{tool}</li>)}
+              </ul>
+            </li>
+          ))}
+        </ol>
+        <p class="earlier">
+          <strong>Before Ceros</strong> <span class="muted">· two years at a software house, and freelance work building websites and web apps.</span>
+        </p>
+      </section>
+
+      <section class="keep">
+        <h2>Side projects</h2>
+        <ul class="projects">
+          {sideProjects.map((p) => {
+            const link = p.data.links[0];
+            return (
+              <li data-optional={OPTIONAL.has(p.id) ? p.id : undefined} hidden={OPTIONAL.has(p.id)}>
+                <div class="role-head">
+                  <h3>{p.data.title} <span class="muted">· {p.data.status}</span></h3>
+                  {link && <a class="when" href={link.href}>{bare(link.href)}</a>}
+                </div>
+                <p>{p.data.summary}</p>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div class="pair keep">
+        <section>
+          <h2>Education</h2>
+          <p><strong>Bachelor's in Economics</strong> <span class="muted">· 2026</span><br />Kozminski University, studied at weekends alongside full-time work</p>
+        </section>
+        <section>
+          <h2>Languages</h2>
+          <p>Polish and Croatian (native), English, some Spanish</p>
+        </section>
+      </div>
+
+      <section class="keep">
+        <h2>How I work</h2>
+        <p>
+          Long before AI tools I was the top committer on my teams, writing it all by hand. Today most of my code is
+          written by agents, and I spend my time on architecture, on reviewing what they produce and on deciding what's
+          worth building. I've worked across time zones for years: clear writing, decisions that don't wait for a
+          meeting, and enough overlap to talk things through when it matters.
+        </p>
+      </section>
+    </main>
+    <script is:inline>
+      // Reveal the optional side projects this application asked for (see OPTIONAL above).
+      const wanted = new URLSearchParams(location.search).get('with')?.split(',') ?? [];
+      for (const li of document.querySelectorAll('[data-optional]')) {
+        if (wanted.includes(li.dataset.optional)) li.hidden = false;
+      }
+    </script>
+    <footer id="site-footer" class="print-hide">
+      <button class="button" type="button" onclick="print()">Save as PDF</button>
+    </footer>
+  </body>
+</html>
+
+<style>
+  /* Always the light theme: it reads better on paper and on screen as a PDF. */
+  :global(:root) { color-scheme: light !important; }
+  :global(body) { font-size: 9.6pt; line-height: 1.5; }
+
+  .sheet {
+    max-width: 210mm;
+    margin: 2rem auto;
+    padding: 16mm 16mm 14mm;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .top { display: flex; align-items: center; gap: 1.5rem; padding-bottom: 0.9rem; border-bottom: 2px solid var(--accent); }
+  .photo { width: 21mm; height: 21mm; border-radius: 999px; object-fit: cover; flex: none; }
+  .who { flex: 1; }
+  h1 { font-size: 22pt; margin: 0; letter-spacing: -0.02em; }
+  .role { margin: 0.15rem 0 0; font-size: 11pt; color: var(--accent); font-weight: 600; }
+  .contact { list-style: none; margin: 0; padding: 0; text-align: right; font-size: 8.8pt; line-height: 1.55; }
+  .contact a { text-decoration: none; color: var(--fg); }
+
+  .lede { margin: 0.9rem 0 0; font-size: 10.4pt; color: var(--muted); }
+
+  section { margin-top: 1.2rem; }
+  h2 {
+    margin: 0 0 0.55rem;
+    font-size: 8.6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    /* The red underline the About page's ball draws under its headings, held still. */
+    width: fit-content;
+    padding-bottom: 0.15rem;
+    border-bottom: 2.5px solid var(--accent-bg);
+  }
+  h3 { font-size: 10.2pt; margin: 0; letter-spacing: -0.01em; }
+  h3 .muted { font-weight: 400; }
+  p { margin: 0; }
+
+  .employer { margin-bottom: 0.5rem; font-size: 10.4pt; }
+  .roles, .projects { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.85rem; }
+  .roles > li, .projects > li { break-inside: avoid; }
+  .role-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 1rem; }
+  .when { font-size: 8.8pt; font-variant-numeric: tabular-nums; }
+  a.when { text-decoration: none; }
+  .points { margin: 0.3rem 0 0; padding-left: 1rem; display: grid; gap: 0.15rem; }
+  .points li::marker { color: var(--accent); }
+  .tags { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .tags li { padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 999px; font-size: 7.8pt; color: var(--muted); }
+  .earlier { margin-top: 0.85rem; }
+  .projects p { margin-top: 0.15rem; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .keep { break-inside: avoid; }
+
+  footer { text-align: center; margin: 0 0 3rem; }
+
+  @page { size: A4; margin: 12mm 14mm; }
+  @media print {
+    :global(body) { background: #fff; }
+    .sheet { margin: 0; padding: 0; max-width: none; border: 0; border-radius: 0; background: none; }
+    .print-hide { display: none; }
+    /* Keep the background tints and the accent rules when printing. */
+    :global(html) { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>

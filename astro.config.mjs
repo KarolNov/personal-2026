@@ -21,7 +21,8 @@ export default defineConfig({
   // `cache.enabled` in wrangler.jsonc). Routes and server islands opt in with Astro.cache.set(); the rest
   // stay uncached.
   cache: { provider: cacheCloudflare() },
-  integrations: [mdx(), sitemap()],
+  // The printable resume is noindex: it's there to be saved as a PDF, not found on its own.
+  integrations: [mdx(), sitemap({ filter: (page) => !page.endsWith('/resume/') })],
   vite: {
     // The adapter pre-bundles every page's imports for workerd in dev, and resvg's native binary
     // can't be bundled. The share cards only ever render in Node (see prerenderEnvironment).
