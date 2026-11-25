@@ -1,0 +1,39 @@
+---
+// A vertical YouTube Short, centred and phone-sized. It uses the no-cookie domain and loads lazily, so nothing
+// reaches YouTube until the reader scrolls near it.
+
+interface Props {
+  /** The id from the Short's URL: youtube.com/shorts/<id>. */
+  id: string;
+  /** What the video is, for screen readers and the iframe title. */
+  title: string;
+}
+const { id, title } = Astro.props;
+---
+
+<figure class="short">
+  <iframe
+    src={`https://www.youtube-nocookie.com/embed/${id}`}
+    title={title}
+    loading="lazy"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen
+  ></iframe>
+  <figcaption><slot /></figcaption>
+</figure>
+
+<style>
+  .short { margin: 2.25rem auto; width: min(20rem, 100%); }
+  iframe {
+    display: block;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+  }
+  figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.88rem; text-align: center; }
+  figcaption:empty { display: none; }
+  figcaption :global(p) { margin: 0; }
+</style>

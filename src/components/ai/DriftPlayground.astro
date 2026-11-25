@@ -1,0 +1,231 @@
+---
+// A toy version of the blueprint loop: one requirement in a spec, the line of code that implements it, and an agent
+// that changes the code without touching the spec. The drift check notices, and the reader decides which side was
+// right. The page renders the in-sync starting state, so it reads fine without JavaScript; the script makes the
+// buttons live.
+---
+
+<figure class="drift" data-drift>
+  <div class="panes">
+    <section class="pane" aria-label="The spec">
+      <header><span class="label">Spec</span><span class="where">billing · Notion</span></header>
+      <div class="body spec">
+        <p class="req">Requirement: Free plan</p>
+        <p>
+          A free account SHALL have at most <mark data-spec-limit>3</mark> projects. Creating one more SHALL show the
+          upgrade prompt.
+        </p>
+      </div>
+    </section>
+    <section class="pane" aria-label="The code">
+      <header><span class="label">Code</span><span class="where">src/billing/limits.ts</span></header>
+      <pre class="body code"><code><span class="kw">export const</span> FREE_PROJECT_LIMIT = <mark data-code-limit>3</mark>;</code></pre>
+    </section>
+  </div>
+
+  <p class="status" data-status="ok" aria-live="polite">
+    <span class="dot" aria-hidden="true"></span><span data-status-text>Spec and code agree.</span>
+  </p>
+
+  <div class="stage" data-stage="start">
+    <p class="say" data-say>
+      An agent is asked to fix a failing onboarding test. The test creates four projects on a free account.
+    </p>
+    <div class="actions" data-actions>
+      <button type="button" class="primary" data-act="agent">Let the agent fix the test</button>
+    </div>
+  </div>
+
+  <figcaption><slot /></figcaption>
+</figure>
+
+<script>
+  type Act = 'agent' | 'drift' | 'sync' | 'reset';
+  interface Step {
+    spec: string;
+    code: string;
+    status: 'ok' | 'drift';
+    statusText: string;
+    say: string;
+    actions: { act: Act; label: string; primary?: boolean }[];
+  }
+
+  const steps: Record<Act | 'start', Step> = {
+    start: {
+      spec: '3',
+      code: '3',
+      status: 'ok',
+      statusText: 'Spec and code agree.',
+      say: 'An agent is asked to fix a failing onboarding test. The test creates four projects on a free account.',
+      actions: [{ act: 'agent', label: 'Let the agent fix the test', primary: true }],
+    },
+    agent: {
+      spec: '3',
+      code: '5',
+      status: 'drift',
+      statusText: 'billing drifted: its code changed since the spec last agreed with it.',
+      say: 'The agent raised the limit to 5 and the test passes. The diff looks fine. But the spec says 3, and a user would notice the difference. Which one is right?',
+      actions: [
+        { act: 'drift', label: 'The spec. Fix the code', primary: true },
+        { act: 'sync', label: 'The code. Update the spec' },
+      ],
+    },
+    drift: {
+      spec: '3',
+      code: '3',
+      status: 'ok',
+      statusText: 'Spec and code agree.',
+      say: '/blueprint-drift judged the code against the spec: the limit goes back to 3, and the test is the thing that was wrong, so it gets fixed instead.',
+      actions: [{ act: 'reset', label: 'Start over' }],
+    },
+    sync: {
+      spec: '5',
+      code: '5',
+      status: 'ok',
+      statusText: 'Spec and code agree.',
+      say: '/blueprint-sync judged the spec against the code: free accounts get 5 projects now, and it’s written down, so the next agent reads it as a decision, not an accident.',
+      actions: [{ act: 'reset', label: 'Start over' }],
+    },
+    reset: undefined as unknown as Step,
+  };
+  steps.reset = steps.start;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-drift]')) {
+    const specLimit = root.querySelector<HTMLElement>('[data-spec-limit]')!;
+    const codeLimit = root.querySelector<HTMLElement>('[data-code-limit]')!;
+    const status = root.querySelector<HTMLElement>('.status')!;
+    const statusText = root.querySelector<HTMLElement>('[data-status-text]')!;
+    const stage = root.querySelector<HTMLElement>('.stage')!;
+    const say = root.querySelector<HTMLElement>('[data-say]')!;
+    const actions = root.querySelector<HTMLElement>('[data-actions]')!;
+
+    function bump(el: HTMLElement, value: string) {
+      if (el.textContent === value) return;
+      el.textContent = value;
+      el.classList.remove('changed');
+      void el.offsetWidth; // restart the highlight
+      el.classList.add('changed');
+    }
+
+    function show(act: Act | 'start', focus: boolean) {
+      const s = steps[act];
+      bump(specLimit, s.spec);
+      bump(codeLimit, s.code);
+      status.dataset.status = s.status;
+      statusText.textContent = s.statusText;
+      stage.dataset.stage = act;
+      say.textContent = s.say;
+      actions.replaceChildren(
+        ...s.actions.map((a) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = a.label;
+          if (a.primary) b.className = 'primary';
+          b.addEventListener('click', () => show(a.act, true));
+          return b;
+        }),
+      );
+      if (focus) actions.querySelector('button')?.focus({ preventScroll: true });
+    }
+
+    show('start', false);
+  }
+</script>
+
+<style>
+  .drift {
+    --w: min(50rem, 100vw - 2.5rem);
+    width: var(--w);
+    margin: 2.25rem calc((100% - var(--w)) / 2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    font-size: 0.92rem;
+    overflow: hidden;
+  }
+
+  .panes { display: grid; grid-template-columns: 1fr; }
+  @media (min-width: 40rem) {
+    .panes { grid-template-columns: 1fr 1fr; }
+    .pane + .pane { border-left: 1px solid var(--border); }
+  }
+  @media (max-width: 39.99rem) {
+    .pane + .pane { border-top: 1px solid var(--border); }
+  }
+  .pane { display: flex; flex-direction: column; }
+  .pane header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .label { font-weight: 600; }
+  .where { color: var(--muted); font-family: var(--font-mono); font-size: 0.75rem; }
+  .body { margin: 0; padding: 0.9rem 1rem 1rem; }
+  .spec p { margin: 0; }
+  .spec .req { margin-bottom: 0.4rem; font-weight: 600; }
+  .code {
+    background: var(--code-bg);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    flex: 1;
+    border: 0;
+    border-radius: 0;
+  }
+  .kw { color: var(--code-fg); }
+
+  mark {
+    padding: 0 0.25em;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-weight: 600;
+  }
+  mark.changed { animation: flash 900ms var(--ease-out); }
+  @keyframes flash {
+    from { background: var(--selection); }
+    to { background: transparent; }
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    transition: color 200ms var(--ease-out);
+  }
+  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--success); flex: none; }
+  .status[data-status='drift'] { color: var(--danger); }
+  .status[data-status='drift'] .dot { background: var(--danger); }
+
+  .stage { padding: 0.8rem 1rem 1rem; border-top: 1px solid var(--border); }
+  .say { margin: 0 0 0.8rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .actions :global(button) {
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out), background-color 160ms var(--ease-out);
+  }
+  .actions :global(button.primary) { border-color: transparent; background: var(--accent-bg); color: var(--accent-fg); }
+  .actions :global(button:active) { transform: scale(0.97); }
+
+  figcaption { padding: 0.7rem 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  figcaption:empty { display: none; }
+  figcaption :global(p) { margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    mark.changed { animation: none; }
+    .status, .actions :global(button) { transition: none; }
+  }
+</style>

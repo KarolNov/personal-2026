@@ -1,0 +1,182 @@
+---
+title: Give the AI something to lean on
+description: Agents can play every instrument but don't remember what record you're making. Why codebases drift away from what the product is meant to do, why specs rot, and how I keep intent and code in sync with blueprint.
+pubDate: 2026-11-25
+tags: [ai, specs, claude code]
+---
+
+import SeriesNav from '../../components/SeriesNav.astro';
+import YouTubeShort from '../../components/YouTubeShort.astro';
+import DriftPlayground from '../../components/ai/DriftPlayground.astro';
+import Figure from '../../components/Figure.astro';
+import Checklist from '../../components/Checklist.astro';
+import { AI_SERIES } from '../../lib/series';
+import map from '../../assets/projects/blueprint-map.jpg';
+import mapDark from '../../assets/projects/blueprint-map-dark.jpg';
+
+Product engineering used to come with an entry exam. Before you got to the fun part, deciding what the thing should
+do and how it should feel, you had to know the framework, the build tool, the browser quirks and the exact
+incantation for this version of that library.
+
+The exam is mostly gone. An agent will scaffold the app, write the migration and fix the flaky test while you make
+coffee. What's left, and suddenly worth a lot more, is taste: which flow feels right, which feature to cut, what the
+product is actually for.
+
+Which makes Rick Rubin a surprisingly good role model for engineers. He's produced records for Johnny Cash, the
+Beastie Boys, Slayer and the Red Hot Chili Peppers. Here he is on how much he knows about music:
+
+<YouTubeShort id="akcSX81KOv4" title="Rick Rubin: I don't know nothing about music">
+  Rick Rubin on what he actually brings to a record.
+</YouTubeShort>
+
+What he brings isn't technique. It's taste, and knowing what the record is meant to be. The people in the room can
+play. He's the one who remembers why.
+
+Coding agents are the session musicians of your dreams: they can play every instrument, sight-read anything and
+never need a second take. They'll write the migration, the component and the tests faster than you can read them.
+They just don't listen to the music, and they have no memory of what record you're making. Every
+session starts from nothing, reads whatever code is in front of it and makes the change that looks right from
+there.
+
+<SeriesNav series={AI_SERIES} current="give-the-ai-something-to-lean-on" />
+
+In the [last post](/blog/show-dont-prompt/) I wrote about how people talk to each other now that AI can write a
+wall of text in seconds. This one is the same idea from the other side: how you talk to the AI. A longer prompt
+rarely helps. What helps is giving it something solid to lean on, and the most useful thing to lean on is a
+written record of what the product is meant to do.
+
+## Drift is quiet
+
+Nobody decides to turn a codebase into slop. It happens one reasonable change at a time.
+
+An agent fixes a bug by patching the nearest file instead of the place the rule actually lives. Another adds a
+flag rather than reading why the code works the way it does. A third finds a limit, say "free accounts get three
+projects", can't tell whether it's a product decision or an accident, and quietly changes it to make a test pass.
+Each change is fine in its own diff and passes review. A few months later the code still says what it *does*, but
+nobody, human or agent, can say what it's *meant* to do.
+
+That's the drift: away from product intent, one session at a time. And it compounds, because the next agent learns
+what the product is from the code, including everything the last few got slightly wrong.
+
+The fix isn't a better prompt. The intent has to live somewhere outside the chat, where every session can read it
+and where you, not the agent, decide what it says.
+
+## Written intent, and why it rots
+
+The obvious answer is to write it down. A `CLAUDE.md`, architecture docs, notes on where things live and why. On
+Flex the docs are the one thing every change has to keep up to date: where things live, how they fit together and
+why. On top of that we've experimented with [wayfinder](https://github.com/mattpocock/skills), to help the agent
+find its way around, and [OpenSpec](https://github.com/Fission-AI/OpenSpec) for specs.
+
+I liked OpenSpec a lot at first. You describe each part of the system as requirements with scenarios, and changes
+go in as deltas against those specs, so an agent reads what the product is meant to do before it touches the code.
+The trouble is that specs drift away from the code easily, and keeping them up to date turns into a chore that
+nobody wants. A spec that's wrong is worse than no spec, because the agent trusts it.
+
+So written intent on its own isn't enough. You also need to know, cheaply and all the time, when the writing and
+the code stop agreeing, and to decide which one is right.
+
+## blueprint
+
+That's why I started building [blueprint](/projects/blueprint/), a Claude Code plugin for larger changes. It's
+built around one rule: **the specs are the source of truth for intent, the code is the source of truth for
+behaviour**, and when they disagree on something a user would notice, the agent asks you instead of picking one.
+
+A heads-up: blueprint is moving fast, and this post describes an early version of it. It can already check coverage
+too, with tests tagged with the scenarios they cover, and I have a lot more ideas for it. The
+[project page](/projects/blueprint/) is where the current state lives.
+
+It works in a loop:
+
+1. **You bring the solution.** `/blueprint <the change you have in mind>` plays it back, sketches it and grills it
+   in a few short rounds. It challenges your design only where it collides with a fact in the code. The decisions
+   stay yours.
+2. **It writes the change down twice.** A plain-text *brief* for agents, with the decisions, the spec delta and the
+   tasks, and a visual *review* for people, with a before → after diagram. Both live where your team already keeps
+   docs (Notion by default), not in the repo.
+3. **It builds against the brief.** `/blueprint apply` works task by task, checks each requirement against the
+   code, and folds the delta into the capability specs when it's done.
+4. **It notices drift.** A small `.blueprint/` folder in the repo maps each capability to the code that implements
+   it. From git alone, a script can tell which capabilities' code changed since their spec last agreed with it, so
+   a pull request can say "these specs need another look" without anyone remembering to check.
+
+Drift goes two ways, and blueprint treats them differently. If the code strayed from the spec,
+`/blueprint-drift` judges the code against the spec and fixes the code. If the spec fell behind the code,
+`/blueprint-sync` judges the spec against the code and fixes the spec. Either way, anything a user would notice
+comes back to you as a question.
+
+Here's the free plan from earlier, with a drift check watching it:
+
+<DriftPlayground>
+  A toy version of the loop. The real thing, with the pane, the reviews and the capability map, is on the
+  [blueprint page](/projects/blueprint/).
+</DriftPlayground>
+
+This is the Rick Rubin split. The agent does the playing: it reads the code, finds the facts, writes the specs and
+the diffs. You keep the part only you can do: deciding what the thing is meant to be.
+
+That doesn't make technical knowledge optional. Rubin may not play, but he's spent decades in studios and can tell
+when a take is wrong. It's the same with agents: taste only works if you know the field well enough to spot when a
+spec is naive or a diff quietly breaks something. The knowledge moved from writing the code to judging it.
+
+## What it looks like in practice
+
+[jambo](https://github.com/KarolNov/jambo), a collaborative music board I've been building, runs blueprint. Its
+[specs](https://app.notion.com/p/karolnov/Specs-blueprints-41b43cce21f281a8aedffc816ffb7b69) are public, and so is
+its history.
+
+Here's a real one. Over a few pull requests, the code that lets AI agents join a jam picked up some rules: a cap on
+how many agents fit in a jam, checks on the keys and names they send, and so on. Each was a sensible change. None of
+them made it into the spec. So the next agent to work on seating would have read a spec that knew nothing about the
+limits, and could have "fixed" them away.
+
+A [sync](https://github.com/KarolNov/jambo/commit/a1fba67) brought the spec back in line with the code. Part of
+what it added:
+
+```markdown
+### Requirement: Agent seats
+
+A jam SHALL seat at most 8 agents, and at most 3 from one client address; a new agent past
+either limit SHALL be refused, telling it to pass its agent key. An agent already present
+SHALL always get back in with its key.
+
+- **Scenario: Fourth from one address**
+  - **GIVEN** three agents from one address in a jam
+  - **WHEN** a fourth call from that address comes without a key
+  - **THEN** it is refused, and a call with one of the three keys still gets in
+```
+
+Now the limit is a decision written down, not an accident in the code. The next agent that touches seating reads
+it first.
+
+The [capability map](/projects/blueprint/) shows the same thing for the whole repo: every capability, the ones that
+share files tied together, and drifted ones in red.
+
+<Figure src={map} dark={mapDark} alt="jambo's capability map, with looper selected, its shared-file lines to jams, sounds and board drawn forward, and its requirements listed in the side panel.">
+  jambo's capability map, with `looper` selected.
+</Figure>
+
+## Without blueprint
+
+You don't need blueprint to get most of this. You need intent that's written down, owned by you and checked
+against the code, often. Before you hand a change to an agent:
+
+<Checklist
+  items={[
+    ['Is the intent written down outside the chat?', 'Somewhere every session reads, not in a prompt that’s gone tomorrow.'],
+    ['Does it say what, not how?', 'Requirements and scenarios age far better than descriptions of the code.'],
+    ['Will you know when it’s wrong?', 'A check on every pull request beats a promise to keep docs up to date.'],
+    ['Is it clear which side wins?', 'Specs for intent, code for behaviour, and you for anything a user would notice.'],
+    ['Are the decisions still yours?', 'Let the agent find the facts. Don’t let it pick what the product is.'],
+  ]}
+/>
+
+## Further reading
+
+- **[blueprint](/projects/blueprint/)**: the project page, with the pane, the PR plan and the capability map. The
+  code is in my [skills repo](https://github.com/KarolNov/skills).
+- **[OpenSpec](https://github.com/Fission-AI/OpenSpec)**: spec-driven development for coding agents. blueprint can
+  import OpenSpec specs, and keeps them outside the repo instead.
+- **[Matt Pocock's skills](https://github.com/mattpocock/skills)**, including wayfinder.
+- **[Show, don't prompt](/blog/show-dont-prompt/)**: the first post in this series, about the people side of the
+  same idea.
