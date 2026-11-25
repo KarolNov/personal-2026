@@ -1,0 +1,42 @@
+---
+title: duratom
+summary: Durable, live Jotai atoms over a Yjs document. Read typed values, write validated patches, and re-render only when what an atom shows changes.
+kind: side
+order: 4
+when: "2026"
+status: Open source
+stack: [TypeScript, Jotai, Y.js, React, Standard Schema]
+cover: ../../assets/projects/duratom-docs.jpg
+coverDark: ../../assets/projects/duratom-docs-dark.jpg
+coverAlt: The duratom docs site's introduction page, with the guide, recipes and API in the sidebar and the install command.
+links:
+  - { label: Docs, href: 'https://duratom.karolnov.dev' }
+  - { label: Repo, href: 'https://github.com/KarolNov/duratom' }
+  - { label: npm, href: 'https://www.npmjs.com/package/duratom' }
+---
+
+duratom turns a node of a [Yjs](https://yjs.dev) document into a [Jotai](https://jotai.org) atom. You read a value
+your schema has already checked, you write a patch that's validated before it's merged into the doc, and a component
+re-renders only when the value it shows changes, whoever changed it. Persistence and network sync stay with ordinary
+Yjs providers: duratom has no provider code of its own.
+
+It's the state layer under [jambo](/projects/jambo/), where every pad and loop is read through an atom.
+
+## What's in it
+
+- **Typed atoms.** `typedAtom` points at a path in the doc and checks it with any
+  [Standard Schema](https://standardschema.dev) validator, such as zod, valibot or arktype. It reads as missing,
+  invalid (with the issues) or a value, and an invalid patch changes nothing.
+- **Patches, not overwrites.** A write merges into the doc, so someone else's concurrent edit to another field
+  survives.
+- **Shapes.** You say which fields are Yjs types (text, XML, maps, records, arrays). Everything else is a plain
+  value, last writer wins.
+- **Collections and key-value stores**, with an `ids` atom, an atom per item, and `create` and `remove`.
+- **A core without Jotai**, for reading and writing the doc from anywhere else.
+
+## The docs
+
+The [docs site](https://duratom.karolnov.dev) has a guide, recipes for syncing between devices, offline storage and
+repairing a broken node, and an API reference. It also serves
+[llms.txt](https://duratom.karolnov.dev/llms.txt) and the full docs as one file, so an AI agent can read the
+library's rules before using it.
