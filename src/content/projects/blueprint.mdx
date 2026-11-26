@@ -8,7 +8,7 @@ status: In progress
 stack: [Claude Code, Agent skills, MCP, Notion, Mermaid, Python]
 cover: ../../assets/projects/blueprint-map.jpg
 coverDark: ../../assets/projects/blueprint-map-dark.jpg
-coverAlt: jambo's capability map, with looper selected, its shared-file lines to jams, sounds and board drawn forward, and its requirements listed in the side panel.
+coverAlt: "jambo's capability map after one schema change: capabilities grouped into collab, audio and board, drifted ones outlined in red and possibly affected ones in a lighter red, with collab/room selected and its drift chance, reasons and claimed scenarios in the side panel."
 links:
   - { label: Repo, href: 'https://github.com/KarolNov/skills#blueprint' }
   - { label: Specs in Notion, href: 'https://app.notion.com/p/karolnov/Specs-blueprints-41c43cce21f2819ba9e9e27bc322d312' }
@@ -33,7 +33,7 @@ use daily.
   src="/media/projects/blueprint-demo.mp4"
   poster="/media/projects/blueprint-demo.jpg"
   captions="/media/projects/blueprint-demo.vtt"
-  label="A narrated walkthrough of blueprint: a review with a comment in the Claude Code pane, the same review in Notion, a change's PR groups started from the pane, jambo's capability map, and a drift comment on a pull request."
+  label="A narrated walkthrough of blueprint: a review with a comment in the Claude Code pane, the same review in Notion, a change's PR groups started from the pane, jambo's capability map with drift that follows imports and the tests claiming each scenario, and a drift comment on a pull request."
   aspect="1440 / 900"
 >
   A showcase of the blueprint skill in Claude Code and Notion, from a review to the drift check on a pull request.
@@ -49,6 +49,14 @@ use daily.
   the capability specs.
 - **`/blueprint-drift`** and **`/blueprint-sync`** catch the two ways specs and code drift apart: the code strayed from
   the spec, or the spec fell behind the code.
+- **`/blueprint coverage`** traces each spec scenario to the tests that claim it. A test claims a scenario with a
+  one-line `@scenario` comment, so the report shows which scenarios have unit or end-to-end tests, which have none,
+  and which tags point at nothing. Nothing is run: a scenario is claimed, never "passing".
+- **`/blueprint-tidy`** groups capabilities into domains, each with an overview page, and moves older setups to the
+  current format. It shows one table of moves and writes nothing until you say yes.
+
+A blueprint can also list **artifacts**: things outside the repo that describe a capability, like a Figma file, a
+dashboard or a doc. When the code they describe changes, they're flagged as possibly out of date.
 
 ## Views
 
@@ -64,18 +72,19 @@ and the batch goes back to `/blueprint` to fold into the next revision.
 </Figure>
 
 **The PR plan.** When `/blueprint apply` splits a change into pull requests, the pane draws them as a tree: stacked
-on each other or cut from main, specs last. Once you approve it, ▶ starts each group in its own session.
+on each other, cut from main, or waiting for another group to merge first, with specs last. Once you approve it, ▶ starts each group in its own session.
 
 <Figure src={panePrs} alt="The pane in a terminal, showing a change's PR groups as a tree under main: drift.py artifacts and Docs ready to start, two groups waiting for group 1's PR, and Specs after every group merges.">
   The PR plan for a change, with two groups ready to start.
 </Figure>
 
 **The capability map** (`/blueprint map`) isn't part of the pane: it's one local HTML page, drawn from the repo
-alone. Capabilities sharing files are tied together, drifted ones are red, and clicking one lists its requirements,
-files and the docs outside the repo that describe it. Search covers all of it.
+alone. Capabilities sharing files are tied together. Drifted ones are red, and ones that might be affected are a lighter
+red. Clicking one lists its requirements, the tests that claim each scenario, its files and its artifacts. Search
+covers all of it.
 
-<Figure src={map} dark={mapDark} alt="jambo's capability map, with looper selected, its shared-file lines to jams, sounds and board drawn forward, and its requirements listed in the side panel.">
-  jambo's capability map, with `looper` selected.
+<Figure src={map} dark={mapDark} alt="jambo's capability map after one schema change: capabilities grouped into collab, audio and board, drifted ones outlined in red and possibly affected ones in a lighter red, with collab/room selected and its drift chance, reasons and claimed scenarios in the side panel.">
+  jambo's capability map after one schema change, with `collab/room` selected.
 </Figure>
 
 ## Reviews
@@ -87,6 +96,13 @@ through the old and the new design.
 Specs and blueprints can live in Notion (the default), Obsidian, Linear, Jira and Confluence, GitHub or a Markdown
 folder, with tickets wherever the team keeps them. The only thing in the repo is a small `.blueprint/` folder that
 maps capabilities to code and lets `drift.py` tell from git alone which specs need another look.
+
+`drift.py` also follows imports. If a file that a capability's code imports changes, even a few imports away or in
+another package, it gives that capability a **drift chance** from 0 to 1 and a confidence, with the reasons behind
+both. A high chance counts as drift. A low one is flagged as "possibly affected", so it's worth a look but doesn't
+count as drift. For TypeScript it follows imports symbol by symbol, using the repo's own compiler. A ready-made
+GitHub Action runs the check on every pull request and keeps one comment up to date, listing the capabilities that
+drifted and the artifacts that may need an update.
 
 ## See it in use
 
