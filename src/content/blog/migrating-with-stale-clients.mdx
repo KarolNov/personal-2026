@@ -88,10 +88,11 @@ This is what [Zero](https://zero.rocicorp.dev/docs/zero-schema) does by default:
 server can't serve gets an `onUpdateNeeded` event, which by default calls `location.reload()`. It's also what we do
 on Flex today: we migrate once and ask old clients to reload.
 
-> **TODO:** A sentence or two on how this has worked out on Flex: how often format changes ship, whether people
-> notice the reload, and whether any edits have been lost to it.
-
 It's a good default. There's one shape in storage, one shape in the code, and no translation code to get wrong.
+But if you release several times a day and move fast, as we do on Flex, the reloads add up to a frustrating
+experience. So we're looking at combining this approach with a bridge for simpler changes, which are most of
+our changes anyway.
+
 The cost is everything the reload throws away:
 
 - **Unsent edits.** Anything in the client's queue is in the old shape. You can flush the queue before you refuse
@@ -164,8 +165,7 @@ You don't need tldraw's store to do the same thing. What it boils down to is a b
 is stored in the newest version, each session remembers which version its client speaks, and every message
 crossing between them goes through `up` or `down`.
 
-That's what we're considering adding on Flex, so that some format changes stop needing a reload. Here's the
-clip with a bridge:
+That's the bridge we're looking at for the simpler changes on Flex. Here's the clip with one:
 
 <MigrationPlayground mode="bridge">
   After **Deploy v2**, Alice stays on v1. The server sends her `in` and `out` worked out from what it stores, and
@@ -174,8 +174,8 @@ clip with a bridge:
   lands in the document next to the new fields, where Bob's code doesn't read it.
 </MigrationPlayground>
 
-> **TODO:** Where the bridge plan stands on Flex: which kinds of migrations it should cover first, and whether it
-> runs per record like tldraw's or per update.
+The plan on Flex is simple: some migrations will define both an `up` and a `down`, and those are the ones stale
+clients can stay on, without being forced to refresh.
 
 ### Translate the edit, not the record
 
