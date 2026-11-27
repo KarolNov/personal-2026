@@ -20,3 +20,6 @@ npm-debug.log*
 
 # resume copies with my email, made by scripts/resume-pdf.mjs
 resume-private/
+
+# cover letters, printed to resume-private/ by scripts/letter-pdf.mjs
+letters-private/

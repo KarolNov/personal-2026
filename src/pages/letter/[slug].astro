@@ -1,0 +1,94 @@
+---
+// A printable cover letter in the resume's style, one per file in letters-private/ (gitignored).
+// The route only exists in `astro dev`, so letters never reach the built site.
+// Print with `npm run letter -- <slug>`, which writes resume-private/Karol-Novljakovic-<Company>.pdf.
+import BaseHead from '../../components/BaseHead.astro';
+import SheetHeader from '../../components/SheetHeader.astro';
+import { SITE_TITLE } from '../../consts';
+
+interface Letter {
+  frontmatter: { company: string; role: string; date: string };
+  Content: any;
+}
+
+export function getStaticPaths() {
+  if (!import.meta.env.DEV) return [];
+  const files = import.meta.glob<Letter>('/letters-private/*.md', { eager: true });
+  return Object.entries(files).map(([path, letter]) => ({
+    params: { slug: path.split('/').pop()!.replace(/\.md$/, '') },
+    props: { letter },
+  }));
+}
+
+const { letter } = Astro.props as { letter: Letter };
+const { company, role, date } = letter.frontmatter;
+const { Content } = letter;
+const email = import.meta.env.RESUME_EMAIL;
+---
+
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <BaseHead title={`Cover letter · ${company}`} description={`Cover letter for ${role} at ${company}.`} />
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <main class="sheet">
+      <SheetHeader email={email} />
+      <div class="meta">
+        <h2>Cover letter · {role} at {company}</h2>
+        <span class="muted">{date}</span>
+      </div>
+      <article class="body">
+        <Content />
+      </article>
+      <p class="sign">{SITE_TITLE}</p>
+    </main>
+    <footer class="print-hide">
+      <button class="button" type="button" onclick="print()">Save as PDF</button>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :global(:root) { color-scheme: light !important; }
+  :global(body) { font-size: 10.4pt; line-height: 1.6; }
+
+  .sheet {
+    max-width: 210mm;
+    margin: 2rem auto;
+    padding: 16mm 18mm 16mm;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 1rem; margin-top: 1.4rem; }
+  .meta .muted { font-size: 8.8pt; }
+  h2 {
+    margin: 0;
+    font-size: 8.6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    width: fit-content;
+    padding-bottom: 0.15rem;
+    border-bottom: 2.5px solid var(--accent-bg);
+  }
+
+  .body { margin-top: 1.2rem; }
+  .body :global(p) { margin: 0 0 0.85rem; }
+  .body :global(p:first-child) { font-weight: 600; }
+  .body :global(a) { color: var(--accent); }
+  .sign { margin: 1.4rem 0 0; font-weight: 700; font-size: 11pt; letter-spacing: -0.01em; }
+
+  footer { text-align: center; margin: 0 0 3rem; }
+
+  @page { size: A4; margin: 14mm 16mm; }
+  @media print {
+    :global(body) { background: #fff; }
+    .sheet { margin: 0; padding: 0; max-width: none; border: 0; border-radius: 0; background: none; }
+    .print-hide { display: none; }
+    :global(html) { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
