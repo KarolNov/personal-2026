@@ -1,0 +1,294 @@
+---
+title: Your schema will change, your clients won't
+description: Deploying a new document format doesn't update the tabs people already have open. How to change a collaborative app's schema while old clients keep editing the same document, from migrate-and-reload to a bridge that translates for them, and what tldraw sync does.
+pubDate: 2026-11-27
+tags: [sync engines, crdt, collaboration, migrations]
+draft: false
+---
+
+import MigrationPlayground from '../../components/sync/MigrationPlayground.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+[Part two](/blog/conflict-free-is-not-correct/) followed a clip on a video timeline, stored the obvious way:
+the point where it starts (`in`) and the point where it ends (`out`). The trouble is that moving a clip changes
+both fields. If Alice moves the clip while Bob trims its end, each field takes the last write on its own: Alice's
+`in` and Bob's `out`. Every copy agrees on the result, a clip that ends before it starts.
+
+The fix was to store the clip the way people edit it: where it starts (`start`) and how long it is (`length`). A move only changes
+`start`, a trim only changes `length`, and the same two edits merge into exactly what both people meant.
+
+That's easy to pick on day one. But say you already shipped `in` and `out`, and thousands of documents store
+clips that way. Now you need a migration.
+
+In most apps, a migration is a script you run against the database during a deploy. Your servers run the new code
+a few minutes later, and that's the end of it. In a collaborative app, that's where the trouble starts. The deploy
+doesn't update the tabs people already have open. For a while, a client running version N and a client running
+N+1 edit the same document. And a client that went offline last week will come back with edits written in a shape
+your server no longer stores.
+
+<SeriesNav current="migrating-with-stale-clients" />
+
+## Why this is harder than a database migration
+
+A database migration has two things going for it: the data lives in one place, and you control every piece of
+code that writes to it. You can follow [expand and contract](https://zero.rocicorp.dev/docs/zero-schema): add
+the new column, deploy code that writes both, backfill, deploy code that reads only the new one, drop the old
+column. Every step is something you deploy, on a schedule you pick.
+
+A sync engine gives up both. The document lives on every client too, in memory and often stored locally (IndexedDB, OPFS), and the
+code writing to it is whatever version each person loaded. That old shape survives in more places than you'd
+expect:
+
+- **Open tabs.** People leave editors open for days. Each tab runs the build it loaded and writes the shape that
+  build knows.
+- **Offline queues.** Edits made offline sit in a local queue, in the old shape, until the client reconnects. That
+  might be after two more deploys.
+- **Local caches.** A client that persists the document loads it from disk before it hears from the server.
+- **Version history.** Every snapshot you've kept is in the shape of the day it was taken.
+
+Here's what happens when you don't plan for it. Say the document is a Yjs doc and the migration runs on the
+server: it reads `in` and `out`, writes `start` and `length`, and deletes the old keys. Alice still has the old
+build open. Her code calls `clip.get('in')`, gets `undefined`, and the timeline either throws or draws nothing.
+When she drags the clip, her client writes `in` and `out` again, into a document that now has both shapes in it.
+Every copy converges, as a CRDT promises, on a clip that Alice's code and Bob's code read differently.
+
+## Your options
+
+There are roughly four things you can do with a client that's on the wrong version:
+
+1. **Force a reload.** As soon as the server runs v2, every v1 client reloads. Simple, and anything it hadn't sent
+   yet is lost unless you handle it.
+2. **Refuse old clients.** The same, but checked when a client connects or pushes: the server tells a v1 client it's
+   too old, and the app asks the person to reload.
+3. **Support N and N-1 at once.** Expand and contract, inside the document. For a while, the document stores both
+   shapes and every client keeps them in step.
+4. **Translate per client.** The server stores v2 and talks to each client in that client's version: v1 clients
+   get `in` and `out`, and their edits are translated into `start` and `length` on the way in.
+
+The first two are one approach with different timing, and it's where most teams start. The last two are the same
+idea, translating between versions, done in the document or in the server.
+
+## Migrate once, reload the rest
+
+The simplest version that works: give the document a schema version. When the server loads a document stored in
+an older version, it runs the migrations once, saves the result, and serves only the new shape from then on. Each
+client sends its version when it connects. If it doesn't match, the server refuses it, and the client tells the
+person a new version is out.
+
+```ts
+socket.on('connect', ({ schemaVersion }) => {
+  if (schemaVersion !== SCHEMA_VERSION) return socket.close(4000, 'client_too_old');
+  // ...send the document and start syncing
+});
+```
+
+Press **Deploy v2** and try editing as Alice afterwards:
+
+<MigrationPlayground mode="reload">
+  Before the deploy, both clients and the server store `in` and `out`. Deploying migrates the server's copy once and
+  opens Bob on the new build. Alice is told to reload. Anything she edits now stays on her machine, and reloading
+  loses it. Take Alice offline before the deploy to see the same thing for edits queued offline.
+</MigrationPlayground>
+
+This is what [Zero](https://zero.rocicorp.dev/docs/zero-schema) does by default: a client whose schema the
+server can't serve gets an `onUpdateNeeded` event, which by default calls `location.reload()`. It's also what we do
+on Flex today: we migrate once and ask old clients to reload.
+
+It's a good default. There's one shape in storage, one shape in the code, and no translation code to get wrong.
+But if you release several times a day and move fast, as we do on Flex, the reloads add up to a frustrating
+experience. So we're looking at combining this approach with a bridge for simpler changes, which are most of
+our changes anyway.
+
+The cost is everything the reload throws away:
+
+- **Unsent edits.** Anything in the client's queue is in the old shape. You can flush the queue before you refuse
+  the client, but an offline client can't be flushed. The fix is to ship the migrations to the client as well, so
+  the new build can upgrade its own queue and cache after the reload instead of throwing them away.
+- **Interruptions.** Every format change reloads everyone who has the document open. If you change the format
+  every week, people notice.
+- **Deploy order.** A client can be *newer* than the server too, while a rolling deploy is half done. It needs the
+  same check in the other direction, and it should wait and retry instead of reloading into the same build.
+
+## Versioned records and migrations both ways: tldraw sync
+
+[tldraw](https://tldraw.dev) has one of the most complete answers to this, and it's open source. It's worth
+reading in [`TLSyncRoom.ts`](https://github.com/tldraw/tldraw/blob/main/packages/sync-core/src/lib/TLSyncRoom.ts)
+and [`migrate.ts`](https://github.com/tldraw/tldraw/blob/main/packages/store/src/lib/migrate.ts).
+
+The document is a store of records, and migrations come in named sequences, one per record type or feature. Each
+migration has an id like `com.example.clip/1`, an `up` and, optionally, a `down`:
+
+```ts
+const versions = createMigrationIds('com.example.clip', { StartLength: 1 });
+
+export const clipMigrations = createMigrationSequence({
+  sequenceId: 'com.example.clip',
+  sequence: [
+    {
+      id: versions.StartLength,
+      scope: 'record',
+      filter: (r) => r.typeName === 'clip',
+      up: (clip) => {
+        clip.start = clip.in;
+        clip.length = clip.out - clip.in;
+        delete clip.in;
+        delete clip.out;
+      },
+      down: (clip) => {
+        clip.in = clip.start;
+        clip.out = clip.start + clip.length;
+        delete clip.start;
+        delete clip.length;
+      },
+    },
+  ],
+});
+```
+
+A schema serialises to the latest version of each sequence, something like
+`{ schemaVersion: 2, sequences: { 'com.example.clip': 1 } }`, and every client sends its own when it connects. The
+server compares the two and does one of three things:
+
+- **Same version.** It syncs as normal.
+- **The client is older, and every migration since then can be reversed.** The server keeps the client connected.
+  It runs every change it sends that client *down* to the client's version, record by record, and runs the
+  client's pushes *up* before applying them. The code calls this `migrateDiffOrRejectSession`.
+- **The client is older, and some migration since then can't be reversed,** because it has no `down` or works on the
+  whole store instead of one record. Or the client is newer than the server. The server rejects the connection as
+  `CLIENT_TOO_OLD` or `SERVER_TOO_OLD`, and the app decides what to tell the person.
+
+So tldraw doesn't pick between reloading and translating. Each migration does. A migration with a `down` keeps old
+clients working through a deploy, and one without falls back to a reload. You decide which one you need when you
+write the migration, which is when you know whether a sensible `down` exists.
+
+Two details make it work. Migrations are per record, so the server can translate one changed record at a time
+instead of the whole document. And the server is in charge: it holds the document in the current version, and
+clients only ever see it through their own version. Nothing in storage is ever written in an old shape.
+
+## Build a bridge
+
+You don't need tldraw's store to do the same thing. What it boils down to is a bridge on the server: the document
+is stored in the newest version, each session remembers which version its client speaks, and every message
+crossing between them goes through `up` or `down`.
+
+That's the bridge we're looking at for the simpler changes on Flex. Here's the clip with one:
+
+<MigrationPlayground mode="bridge">
+  After **Deploy v2**, Alice stays on v1. The server sends her `in` and `out` worked out from what it stores, and
+  translates her edits into `start` and `length`. Watch the messages change version as they pass through the bridge. Turn off **translate for v1**
+  to see what happens without the bridge: Alice's code can't find `in` and `out`, and anything she queued offline
+  lands in the document next to the new fields, where Bob's code doesn't read it.
+</MigrationPlayground>
+
+The plan on Flex is simple: some migrations will define both an `up` and a `down`, and those are the ones stale
+clients can stay on, without being forced to refresh.
+
+### Translate the edit, not the record
+
+Run **Deploy, then move + trim** with the bridge on. Alice moves the clip five seconds right, from her v1 build.
+Bob trims its end four seconds left, from v2. The result is a clip at 7s–10s, which is what both of them meant.
+
+That only works because of how the bridge translates Alice's edit. Moving a clip in v1 writes `in` *and* `out`. If
+the bridge translated her whole record, `{ in: 7, out: 14 }` would become `{ start: 7, length: 7 }`, and her
+`length` would overwrite Bob's trim, even though she never touched the length. Instead, the bridge runs the record
+from before her edit and the record after it through `up`, and writes only the v2 fields that changed:
+
+```ts
+function translatePush(base: V1, writes: Partial<V1>): Partial<V2> {
+  const before = up(base);
+  const after = up({ ...base, ...writes });
+  return pick(after, (key) => after[key] !== before[key]); // a move only changes `start`
+}
+```
+
+The same goes for fields v1 doesn't know about. Say v3 adds a playback `speed`. Going `down`, v1 clients don't see
+it. When Alice edits the clip, her v1 record has no `speed`, so translating the whole record up would reset it to
+the default. Translating only what changed leaves it alone.
+
+### Some migrations don't have a `down`
+
+[Project Cambria](https://www.inkandswitch.com/cambria/), from Ink & Switch, is a thorough look at this
+idea. It describes the translations as *lenses*: one definition that runs both ways, composed into a
+graph of schema versions so any version can talk to any other. Its own conclusion is the honest one:
+"lens evolutions cannot magically make two incompatible pieces of software work perfectly together".
+
+Their main example is a field that holds one assignee becoming a list of assignees. The old client can be shown the
+first one. But when it removes "the" assignee, did it mean the first, or all of them? The `down` is fine, but the
+`up` of the old client's edit has to guess. Other changes have no `down` at all:
+
+- **Merging fields** where the parts can't be recovered, like a first and last name into one.
+- **Splitting a record** into several, or moving data into another document.
+- **Changing what a value means**, like an `out` in source time becoming an `out` in timeline time. Both versions
+  store a number, and the bridge can't tell which one it's looking at.
+
+For those, do what tldraw does: leave out the `down`, and let the server refuse old clients. A bridge doesn't
+replace the reload, it makes it rare.
+
+## If your document is a CRDT
+
+Everything above assumes a server that holds the document and can translate on the way through. With a CRDT like
+Yjs, the document has no schema of its own, and clients merge each other's changes directly. Migrations become
+ordinary edits to the document, and that raises three questions.
+
+**Who runs them?** If every client migrates the document when it loads it, two clients loading the same old
+document will both migrate it. With last-write-wins keys, that's mostly harmless: both write the same `start` and
+`length`. With anything that creates new content, it isn't: two clients that each create a new `Y.Array` for the
+clips and copy the old ones into it produce two arrays, and the merge keeps one of them. Run migrations in one
+place, ideally the server, before it lets any client sync.
+
+**What if one runs twice?** It will, eventually: a retried job, a second server, a client with a cached copy.
+Store the schema version in the document, check it before migrating, and write each migration so running it a
+second time changes nothing. Part two's rule for normalisers applies here too: **deterministic and idempotent**.
+
+**What about old clients still writing?** Deleting `in` and `out` doesn't stop Alice's build from writing them
+again. A CRDT server can't translate a binary update on the way through as easily as tldraw translates a record,
+so the bridge looks different: the document keeps *both* shapes during the transition, and the server, after
+merging any update, brings whichever shape changed back in line with the other. That's expand and contract
+inside the document, with the server doing the dual writes old clients can't. Drop the old keys once no client
+older than v2 has connected for a while, and make sure you're logging client versions on connect so you know when
+that is.
+
+## Rules that make every migration easier
+
+None of these avoid migrations. They make the next one cheaper, whichever approach you pick.
+
+- **Make additive changes first.** A new optional field with a default needs no migration at all: old clients
+  ignore it, and new ones fill in the default when it's missing. Most format changes can start this way.
+- **Never reuse a field name for a new meaning.** If `out` changes from source time to timeline time, it's a new
+  field: `outTimeline`, or a new record version. An old client writing `out` should never be able to write the
+  wrong kind of number into the right field.
+- **Keep N-1 readable.** Every new build should be able to read the previous format, and every migration should
+  have a `down` unless it really can't. That keeps the window where versions overlap safe, whichever way the deploy
+  goes.
+- **Split reading from writing.** Ship the code that *reads* the new format first, behind a flag that keeps writing
+  the old one. Once most clients have the new build, turn on writing. Zero's docs put the same rule as "deploy
+  providers before consumers", and it's what turns a breaking change into two safe ones.
+- **Ship the migrations to the client.** Then a reload can upgrade the offline queue and the local cache instead of
+  throwing them away.
+- **Know who's connected.** Log every client's schema version when it connects. "Can we drop v1 yet?" should be a
+  query, not a guess.
+
+## Before you ship a format change
+
+1. **Is it additive?** Then ship it with a default, and you're done.
+2. **Where does the old shape live?** Open tabs, offline queues, local caches, version history. Each one needs an
+   answer.
+3. **Does the migration have a sensible `down`?** If it does, old clients can stay connected through a bridge. If
+   not, they need to reload.
+4. **What happens to unsent edits?** Migrate them on the client, translate them on the server, or say clearly that
+   they'll be lost.
+5. **Which order do you deploy in?** Readers before writers. And plan for the client that's newer than the server.
+6. **Can a migration run twice, or on two machines at once?** It has to give the same document either way.
+7. **How will you know the old version is gone?** Pick the log line now.
+
+<div id="series">
+  <SeriesNav current="migrating-with-stale-clients" />
+</div>
+
+Further reading: tldraw's [sync-core](https://github.com/tldraw/tldraw/tree/main/packages/sync-core) and
+[store](https://github.com/tldraw/tldraw/tree/main/packages/store) packages, Ink & Switch's
+[Project Cambria](https://www.inkandswitch.com/cambria/) on translating between schema versions with lenses, and
+Zero's [schema docs](https://zero.rocicorp.dev/docs/zero-schema) on deploy order and old clients.
+
+Next up: ordering and moving things in a CRDT. Two people drag the same item to different places, and the merge has
+to decide where it ends up, without duplicating it.
