@@ -159,6 +159,29 @@ export function createRoom(mode: Mode, initial: Clip) {
       return { log, out: snapshotsFor(['alice']) };
     },
 
+    /** Whether messages to and from this client cross the bridge right now. */
+    bridged: (who: ClientId) => mode === 'bridge' && bridge && server.version === 2 && clients[who].version === 1,
+
+    /**
+     * What a message on this client's wire looks like on the other side of the bridge: a v1 push
+     * as the v2 writes it becomes, a v1 snapshot as the v2 record it came from.
+     */
+    across(msg: Message): string | null {
+      const p = msg.payload;
+      if (p.kind === 'push') {
+        const before = up(p.base);
+        const after = up({ ...p.base, ...p.writes });
+        const writes: Rec = {};
+        for (const k of Object.keys(after)) if (after[k] !== before[k]) writes[k] = after[k];
+        return Object.keys(writes).length ? `v2 ${show(writes)}` : 'v2 no change';
+      }
+      if (p.kind === 'snapshot' && p.cells.in && p.cells.out) {
+        const label = show(up({ in: p.cells.in.value, out: p.cells.out.value }));
+        return p.ack != null ? `✓ ${label}` : label;
+      }
+      return null;
+    },
+
     setBridge(on: boolean) {
       bridge = on;
       return server.version === 2 ? snapshotsFor(CLIENTS.filter((c) => clients[c].version === 1)) : [];

@@ -9,9 +9,16 @@ draft: false
 import MigrationPlayground from '../../components/sync/MigrationPlayground.astro';
 import SeriesNav from '../../components/SeriesNav.astro';
 
-[Part two](/blog/conflict-free-is-not-correct/) ended with a better shape for a clip on a timeline: store where it
-starts and how long it is, not its `in` and `out` points. Good advice for a new app. But say you already shipped
-`in` and `out`, and thousands of documents store clips that way. Now you need a migration.
+[Part two](/blog/conflict-free-is-not-correct/) followed a clip on a video timeline, stored the obvious way:
+the point where it starts (`in`) and the point where it ends (`out`). The trouble is that moving a clip changes
+both fields. If Alice moves the clip while Bob trims its end, each field takes the last write on its own: Alice's
+`in` and Bob's `out`. Every copy agrees on the result, a clip that ends before it starts.
+
+The fix was to store the clip the way people edit it: where it starts (`start`) and how long it is (`length`). A move only changes
+`start`, a trim only changes `length`, and the same two edits merge into exactly what both people meant.
+
+That's easy to pick on day one. But say you already shipped `in` and `out`, and thousands of documents store
+clips that way. Now you need a migration.
 
 In most apps, a migration is a script you run against the database during a deploy. Your servers run the new code
 a few minutes later, and that's the end of it. In a collaborative app, that's where the trouble starts. The deploy
@@ -28,7 +35,7 @@ code that writes to it. You can follow [expand and contract](https://zero.rocico
 the new column, deploy code that writes both, backfill, deploy code that reads only the new one, drop the old
 column. Every step is something you deploy, on a schedule you pick.
 
-A sync engine gives up both. The document lives on every client too, in memory and often in IndexedDB, and the
+A sync engine gives up both. The document lives on every client too, in memory and often stored locally (IndexedDB, OPFS), and the
 code writing to it is whatever version each person loaded. That old shape survives in more places than you'd
 expect:
 
@@ -37,8 +44,7 @@ expect:
 - **Offline queues.** Edits made offline sit in a local queue, in the old shape, until the client reconnects. That
   might be after two more deploys.
 - **Local caches.** A client that persists the document loads it from disk before it hears from the server.
-- **Version history.** Every snapshot you've kept is in the shape of the day it was taken. Restoring one is a
-  migration too, which is [part six](#series).
+- **Version history.** Every snapshot you've kept is in the shape of the day it was taken.
 
 Here's what happens when you don't plan for it. Say the document is a Yjs doc and the migration runs on the
 server: it reads `in` and `out`, writes `start` and `length`, and deletes the old keys. Alice still has the old
@@ -169,7 +175,7 @@ That's the bridge we're looking at for the simpler changes on Flex. Here's the c
 
 <MigrationPlayground mode="bridge">
   After **Deploy v2**, Alice stays on v1. The server sends her `in` and `out` worked out from what it stores, and
-  translates her edits into `start` and `length`. Watch the labels change on the wire. Turn off **translate for v1**
+  translates her edits into `start` and `length`. Watch the messages change version as they pass through the bridge. Turn off **translate for v1**
   to see what happens without the bridge: Alice's code can't find `in` and `out`, and anything she queued offline
   lands in the document next to the new fields, where Bob's code doesn't read it.
 </MigrationPlayground>

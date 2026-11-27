@@ -43,6 +43,12 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     <svg class="wires" aria-hidden="true">
       {PEERS.map((p) => <path data-wire={p.id} />)}
     </svg>
+    {mode === 'bridge' && (
+      <div class="bridge" data-bridge-box hidden aria-hidden="true">
+        <span class="bridge-title" data-bridge-title>bridge</span>
+        <span class="bridge-map">v1 ⇄ v2</span>
+      </div>
+    )}
     {PEERS.map((p) => (
       <div class="peer" data-peer={p.id}>
         <div class="peer-head">
@@ -148,7 +154,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-areas: 'alice bob' 'server server';
-    gap: 4.5rem 1rem;
+    gap: 7.5rem 1rem;
     padding: 1.25rem 1rem;
   }
   .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
@@ -316,6 +322,36 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
   .stage :global(.pill.bob) { --who: var(--bob); }
   .stage :global(.pill.ack) { --who: var(--muted); font-weight: 400; }
   .stage :global(.pill small) { font-size: inherit; font-weight: 400; opacity: 0.8; }
+  .stage :global(.pill .txt) { display: inline-block; }
+
+  /* The translation layer, halfway along Alice's wire. Pills pass under it,
+     and come out the other side in the other version. */
+  .bridge {
+    position: absolute;
+    z-index: 3;
+    left: var(--x, 25%);
+    top: var(--y, 70%);
+    translate: -50% -50%;
+    display: grid;
+    justify-items: center;
+    gap: 0.05rem;
+    padding: 0.3rem 0.7rem;
+    border: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    font: 0.68rem/1.3 var(--font-mono);
+    color: var(--muted);
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 250ms, scale 250ms var(--ease-out);
+    animation: fade-in 300ms var(--ease-out);
+  }
+  .bridge[hidden] { display: none; }
+  .bridge-title { font-weight: 600; color: var(--fg); letter-spacing: 0.02em; }
+  .bridge.off { opacity: 0.4; }
+  .bridge.off .bridge-map { text-decoration: line-through; }
 
   @keyframes pop { from { transform: scale(0.6); opacity: 0; } }
   @keyframes fade-in { from { opacity: 0; } }
@@ -324,7 +360,7 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     .clip { transition: none; }
   }
   @media (max-width: 30rem) {
-    .stage { gap: 4rem 0.6rem; padding-inline: 0.6rem; }
+    .stage { gap: 6.5rem 0.6rem; padding-inline: 0.6rem; }
     .peer, .server { padding: 0.5rem; }
     .toggle span { font-size: 0.75rem; }
   }
@@ -355,6 +391,10 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     const playBtn = root.querySelector<HTMLButtonElement>('[data-play]')!;
     const bridgeInput = root.querySelector<HTMLInputElement>('[data-bridge]');
     const note = serverEl.querySelector<HTMLElement>('[data-note]')!;
+    const bridgeBox = root.querySelector<HTMLElement>('[data-bridge-box]');
+    const bridgeTitle = root.querySelector<HTMLElement>('[data-bridge-title]');
+    /** How far along Alice's wire, from her end, the bridge sits. */
+    const BRIDGE_AT = 0.5;
 
     const view = (el: HTMLElement) => ({
       el,
@@ -436,9 +476,14 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
     }
 
     function fly(client: ClientId, dir: Dir, msg: Message, ms: number, count: number) {
+      // A message on a bridged wire is in v1 on Alice's side of the bridge and in v2 on the server's.
+      const across = room.bridged(client) ? room.across(msg) : null;
       const el = document.createElement('span');
       el.className = `pill ${dir === 'down' || msg.ack ? 'ack' : client}`;
-      el.textContent = msg.label;
+      const txt = document.createElement('span');
+      txt.className = 'txt';
+      txt.textContent = across && dir === 'down' && !reduceMotion.matches ? across : msg.label;
+      el.appendChild(txt);
       if (count > 1) {
         const n = document.createElement('small');
         n.textContent = ` +${count - 1}`;
@@ -447,6 +492,37 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
       el.style.offsetPath = `path("${peers[client].wire.getAttribute('d')}")`;
       stage.appendChild(el);
       const at = (pct: number) => `${dir === 'up' ? pct : 100 - pct}%`;
+      if (across && !reduceMotion.matches) {
+        // Constant speed, so the moment it reaches the bridge is easy to know.
+        const when = dir === 'up' ? BRIDGE_AT : 1 - BRIDGE_AT;
+        const animation = el.animate(
+          [
+            { offsetDistance: at(0), opacity: 0, transform: 'scale(0.8)' },
+            { offsetDistance: at(6), opacity: 1, transform: 'scale(1)', offset: 0.06 },
+            { offsetDistance: at(94), opacity: 1, transform: 'scale(1)', offset: 0.94 },
+            { offsetDistance: at(100), opacity: 0, transform: 'scale(0.9)' },
+          ],
+          { duration: ms, easing: 'linear' },
+        );
+        animation.onfinish = animation.oncancel = () => el.remove();
+        const MORPH = 360;
+        setTimeout(() => {
+          if (!el.isConnected) return;
+          txt.animate(
+            [
+              { filter: 'blur(0)', opacity: 1, transform: 'scaleX(1)' },
+              { filter: 'blur(4px)', opacity: 0.1, transform: 'scaleX(0.7)', offset: 0.5 },
+              { filter: 'blur(0)', opacity: 1, transform: 'scaleX(1)' },
+            ],
+            { duration: MORPH, easing: 'ease-in-out' },
+          );
+          setTimeout(() => {
+            if (el.isConnected) txt.textContent = dir === 'up' ? across : msg.label;
+          }, MORPH / 2);
+          bridgeBox?.animate([{ scale: '1' }, { scale: '1.08' }, { scale: '1' }], { duration: MORPH, easing: 'ease-out' });
+        }, when * ms - MORPH / 2);
+        return;
+      }
       const animation = reduceMotion.matches
         ? el.animate({ offsetDistance: ['50%', '50%'], opacity: [0, 1, 1, 0] }, { duration: ms })
         : el.animate(
@@ -544,6 +620,11 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
         : mode === 'reload'
           ? 'rejects v1'
           : room.bridge ? 'translates for v1' : 'no translation';
+      if (bridgeBox && bridgeTitle) {
+        bridgeBox.hidden = room.serverVersion !== 2;
+        bridgeBox.classList.toggle('off', !room.bridge);
+        bridgeTitle.textContent = room.bridge ? 'bridge' : 'bridge off';
+      }
     }
 
     function refresh() {
@@ -621,6 +702,12 @@ const LABELS = Array.from({ length: TRACK / 5 + 1 }, (_, i) => i * 5);
         const y2 = s.top - box.top;
         const my = (y1 + y2) / 2;
         peers[id].wire.setAttribute('d', `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`);
+      }
+      if (bridgeBox) {
+        const wire = peers.alice.wire;
+        const p = wire.getPointAtLength(wire.getTotalLength() * BRIDGE_AT);
+        bridgeBox.style.setProperty('--x', `${p.x}px`);
+        bridgeBox.style.setProperty('--y', `${p.y}px`);
       }
     }
     new ResizeObserver(layout).observe(stage);
