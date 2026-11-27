@@ -1,5 +1,5 @@
 export const SITE_TITLE = 'Karol Novljaković';
-export const SITE_DESCRIPTION = 'Principal software engineer building complex web products.';
+export const SITE_DESCRIPTION = 'Building things for the web and writing down what I learn.';
 export const NAV = [
   { href: '/', label: 'Home' },
   { href: '/about/', label: 'About' },
