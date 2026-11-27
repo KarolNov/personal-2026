@@ -2,8 +2,8 @@
 
 [![karolnov.dev](public/og.png)](https://karolnov.dev)
 
-Source for **[karolnov.dev](https://karolnov.dev)**, my personal site and blog. I'm a principal software engineer
-building complex web products, and I write here about sync engines, collaboration and working with AI.
+Source for **[karolnov.dev](https://karolnov.dev)**, my personal site and blog. I build things for the web
+and write here about what I learn: sync engines, collaboration and working with AI.
 
 It's built with [Astro](https://astro.build) and runs as a single [Cloudflare Worker](https://developers.cloudflare.com/workers/):
 pages are prerendered and served as static assets, and the few routes that need a server run on demand at the edge.
