@@ -3,14 +3,11 @@
 // light theme. Print it from the browser (Save as PDF) to get the file to send.
 // Side projects that only matter to some applications are left out unless named in the URL,
 // e.g. /resume/?with=linear-weather for a job at Linear.
-import { Image } from 'astro:assets';
-import portrait from '../assets/karol.jpg';
 import BaseHead from '../components/BaseHead.astro';
+import SheetHeader from '../components/SheetHeader.astro';
 import { roles } from '../lib/roles';
 import { getProjects } from '../lib/projects';
-import { SITE_TITLE, GITHUB_LOGIN, GITHUB_URL, LINKEDIN_URL } from '../consts';
 
-const site = Astro.site!;
 // getProjects() includes drafts in `astro dev`, which prints the private copies; keep them out.
 const sideProjects = (await getProjects()).filter((p) => p.data.kind === 'side' && !p.data.draft);
 // The email goes only on the private copy: it's read from .env.local (gitignored) and only in
@@ -30,20 +27,7 @@ const bare = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/[
   </head>
   <body>
     <main class="sheet">
-      <header class="top">
-        <Image class="photo" src={portrait} alt="" width={180} height={180} loading="eager" />
-        <div class="who">
-          <h1>{SITE_TITLE}</h1>
-          <p class="role">Principal Software Engineer</p>
-        </div>
-        <ul class="contact">
-          {email && <li><a href={`mailto:${email}`}>{email}</a></li>}
-          <li><a href={site.href}>{bare(site.href)}</a></li>
-          <li><a href={LINKEDIN_URL}>{bare(LINKEDIN_URL)}</a></li>
-          <li><a href={GITHUB_URL}>github.com/{GITHUB_LOGIN}</a></li>
-          <li class="muted">Poland · open to remote</li>
-        </ul>
-      </header>
+      <SheetHeader email={email} />
 
       <p class="lede">
         Principal software engineer with years of building complex, user-centric web products — from visual
@@ -141,13 +125,6 @@ const bare = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/[
     border-radius: var(--radius);
   }
 
-  .top { display: flex; align-items: center; gap: 1.5rem; padding-bottom: 0.9rem; border-bottom: 2px solid var(--accent); }
-  .photo { width: 21mm; height: 21mm; border-radius: 999px; object-fit: cover; flex: none; }
-  .who { flex: 1; }
-  h1 { font-size: 22pt; margin: 0; letter-spacing: -0.02em; }
-  .role { margin: 0.15rem 0 0; font-size: 11pt; color: var(--accent); font-weight: 600; }
-  .contact { list-style: none; margin: 0; padding: 0; text-align: right; font-size: 8.8pt; line-height: 1.55; }
-  .contact a { text-decoration: none; color: var(--fg); }
 
   .lede { margin: 0.9rem 0 0; font-size: 10.4pt; color: var(--muted); }
 

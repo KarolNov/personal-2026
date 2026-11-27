@@ -9,7 +9,8 @@
     "deploy": "astro build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "astro": "astro",
-    "resume": "node scripts/resume-pdf.mjs"
+    "resume": "node scripts/resume-pdf.mjs",
+    "letter": "node scripts/letter-pdf.mjs"
   },
   "repository": {
     "type": "git",
